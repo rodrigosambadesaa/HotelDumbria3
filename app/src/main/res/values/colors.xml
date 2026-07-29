@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#008577</color>
+    <color name="colorPrimaryDark">#00574B</color>
+    <color name="colorAccent">#D81B60</color>
+    <color name="color_fecha">#0000FF</color>
+    <color name="color_poblacionesprovincias">#00FF00</color>
+    <color name="brand_primary">#00695C</color>
+    <color name="brand_secondary">#1976D2</color>
+    <color name="surface">#F5F7F6</color>
+    <color name="text_primary">#18201F</color>
+    <color name="text_secondary">#5F6B69</color>
+    <color name="outline">#B8C5C2</color>
+    <color name="image_placeholder">#D9E3E1</color>
+    <color name="checkbox_tint">#00695C</color>
+</resources>

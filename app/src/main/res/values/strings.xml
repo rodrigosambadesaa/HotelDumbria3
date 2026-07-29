@@ -1,0 +1,32 @@
+<resources>
+    <string name="app_name">Hotel Dumbría</string>
+    <string name="navigation_drawer_open">Abrir menú de navegación</string>
+    <string name="navigation_drawer_close">Cerrar menú de navegación</string>
+    <string name="nav_header_title">Usuario</string>
+    <string name="nav_header_subtitle">email@dominio.com</string>
+    <string name="nav_header_desc">Cabacera de navegación</string>
+    <string name="action_settings">Ajustes</string>
+
+    <string name="menu_home">Inicio</string>
+    <string name="menu_gallery">Galería</string>
+    <string name="menu_slideshow">Diapositivas</string>
+    <string name="menu_tools">Herramientas</string>
+    <string name="menu_share">Compartir</string>
+    <string name="menu_send">Enviar</string>
+    <string name="title_activity_maps">Map</string>
+    <string name="title_activity_seleccion_localizacion">Map</string>
+    <string name="login_subtitle">Gestiona tus estancias de forma sencilla</string>
+    <string name="email">Correo electrónico</string>
+    <string name="password">Contraseña</string>
+    <string name="remember_password">Recordar sesión</string>
+    <string name="sign_in">Iniciar sesión</string>
+    <string name="create_account">Crear una cuenta</string>
+    <string name="book_rooms">Reserva tu habitación</string>
+    <string name="stay_dates">Fechas de estancia</string>
+    <string name="check_in">Entrada</string>
+    <string name="check_out">Salida</string>
+    <string name="search_rooms">Buscar habitaciones</string>
+    <string name="confirm_selection">Confirmar selección</string>
+    <string name="select_room">Seleccionar habitación</string>
+    <string name="room_photo">Fotografía de la habitación</string>
+</resources>

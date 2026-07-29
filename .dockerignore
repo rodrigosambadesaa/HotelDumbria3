@@ -1,0 +1,11 @@
+.git
+.gradle
+.idea
+**/build
+local.properties
+ios
+*.iml
+**/node_modules
+admin-web/.git-local-starter
+admin-web/.openai-local-starter
+legacy-import/input

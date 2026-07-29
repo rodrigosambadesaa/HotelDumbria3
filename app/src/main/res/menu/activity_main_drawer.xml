@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:showIn="navigation_view">
+
+    <group android:checkableBehavior="single">
+        <item
+            android:id="@+id/nav_activityReservas"
+            android:icon="@drawable/ic_action_store"
+            android:title="Reservas" />
+        <item
+            android:id="@+id/nav_activityDatos"
+            android:icon="@drawable/ic_action_name"
+            android:title="Perfil" />
+        <item
+            android:id="@+id/nav_contacto"
+            android:icon="@drawable/ic_action_contactar"
+            android:title="Contactar" />
+        <item
+            android:id="@+id/nav_listado_reservas"
+            android:icon="@drawable/ic_action_listar_reservas"
+            android:title="Listado de reservas" />
+    </group>
+</menu>

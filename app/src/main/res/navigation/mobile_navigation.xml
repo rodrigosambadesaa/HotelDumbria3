@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/mobile_navigation"
+    app:startDestination="@id/nav_activityReservas">
+
+    <fragment
+        android:id="@+id/nav_home"
+        android:name="org.hoteldumbria.ui.home.HomeFragment"
+        android:label="Hogar"
+        tools:layout="@layout/fragment_home" />
+
+    <fragment
+        android:id="@+id/nav_gallery"
+        android:name="org.hoteldumbria.ui.gallery.GalleryFragment"
+        android:label="Galería"
+        tools:layout="@layout/fragment_gallery" />
+
+    <fragment
+        android:id="@+id/nav_slideshow"
+        android:name="org.hoteldumbria.ui.slideshow.SlideshowFragment"
+        android:label="@string/menu_slideshow"
+        tools:layout="@layout/fragment_slideshow" />
+
+    <fragment
+        android:id="@+id/nav_tools"
+        android:name="org.hoteldumbria.ui.tools.ToolsFragment"
+        android:label="Herramientas"
+        tools:layout="@layout/fragment_tools" />
+
+    <fragment
+        android:id="@+id/nav_share"
+        android:name="org.hoteldumbria.ui.share.ShareFragment"
+        android:label="Compartir"
+        tools:layout="@layout/fragment_share" />
+
+    <fragment
+        android:id="@+id/nav_send"
+        android:name="org.hoteldumbria.ui.send.SendFragment"
+        android:label="Enviar comentarios"
+        tools:layout="@layout/fragment_send" />
+    <fragment
+        android:id="@+id/nav_activityReservas"
+        android:name="org.hoteldumbria.ActivityReservas"
+        android:label="Reservas"
+        tools:layout="@layout/activity_reservas" />
+    <fragment
+        android:id="@+id/nav_activityDatos"
+        android:name="org.hoteldumbria.ActivityDatos"
+        android:label="Datos personales"
+        tools:layout="@layout/activity_datos" />
+    <fragment
+        android:id="@+id/nav_contacto"
+        android:name="org.hoteldumbria.ActivityContacto"
+        android:label="Contacto"
+        tools:layout="@layout/activity_contacto" />
+    <fragment
+        android:id="@+id/nav_listado_reservas"
+        android:name="org.hoteldumbria.ActivityListadoReservas"
+        android:label="Listar reservas"
+        tools:layout="@layout/activity_listado_reservas" />
+
+
+</navigation>

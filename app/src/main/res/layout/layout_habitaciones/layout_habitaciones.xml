@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical" android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:layout_marginLeft="@dimen/margen_lateral"
+    android:layout_marginRight="@dimen/margen_lateral">
+
+    <TextView
+        android:id="@+id/textViewTituloNoticia"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="@dimen/tamanho_titulo"
+        android:textStyle="bold"
+        />
+
+    <TextView
+        android:id="@+id/textViewFechaNoticia"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/margen_titulo_fecha"
+        android:textStyle="italic"
+        android:textColor="@color/color_fecha"
+        android:textSize="@dimen/tamanho_fecha"/>
+
+    <ImageView
+        android:id="@+id/imageViewImagenAsociadaNoticia"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/margen_fecha_imagen"
+        />
+
+    <TextView
+        android:id="@+id/textViewDescripcionNoticia"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/margen_imagen_descripcion"
+        android:textSize="@dimen/tamanho_descripcion">
+
+    </TextView>
+
+
+
+</LinearLayout>

@@ -1,0 +1,27 @@
+<resources>
+    <!-- Default screen margins, per the Android Design guidelines. -->
+    <dimen name="activity_horizontal_margin">16dp</dimen>
+    <dimen name="activity_vertical_margin">16dp</dimen>
+    <dimen name="nav_header_vertical_spacing">8dp</dimen>
+    <dimen name="nav_header_height">176dp</dimen>
+    <dimen name="fab_margin">16dp</dimen>
+    <dimen name="tamanho_numero_habitacion">30sp</dimen>
+    <dimen name="margen_titulo_fecha">4sp</dimen>
+    <dimen name="tamanho_texto_num_huespedes">25sp</dimen>
+    <dimen name="margen_fecha_imagen">4dp</dimen>
+    <dimen name="margen_vertical_habitaciones">4dp</dimen>
+    <dimen name="tamanho_precio_habitacion">30sp</dimen>
+    <dimen name="margen_lateral">4dp</dimen>
+    <dimen name="tamanho_texto_area">30sp</dimen>
+    <dimen name="tamanho_texto_bienvenida">30sp</dimen>
+    <dimen name="tamanho_titulo_activity_reservas_habitaciones">40sp</dimen>
+    <dimen name="margen_numero_huespedes_chk_reservar">4dp</dimen>
+    <dimen name="margen_niv_elemento">5dp</dimen>
+    <dimen name="margen_elementos_activity_datos">6dp</dimen>
+    <dimen name="tamanho_texto_poblacionesprovincias">22sp</dimen>
+    <dimen name="tamanho_texto_fechas">22sp</dimen>
+    <dimen name="anchura_botones_activity_reservas">150dp</dimen>
+    <dimen name="margen_botones_textview_activity_reservas">30dp</dimen>
+    <dimen name="margen_abajo_nombre_controles_activity_reservas">35dp</dimen>
+    <dimen name="margen_niv_otros_elementos_layout_habitaciones">30dp</dimen>
+</resources>

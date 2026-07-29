@@ -1,0 +1,199 @@
+name: hotel-dumbria
+
+services:
+  postgres:
+    profiles: ["backend"]
+    image: postgres:17.5-bookworm
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks: [hotel-backend]
+
+  api:
+    profiles: ["backend"]
+    build:
+      context: backend
+    command: ["sh", "-c", "node src/migrate.js && node src/seed.js && node src/server.js"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_SECURE: "false"
+      AVATAR_DIRECTORY: /data/avatars
+    ports:
+      - "8080:8080"
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    volumes:
+      - avatar-data:/data/avatars
+    networks: [hotel-backend]
+
+  admin-web:
+    profiles: ["backend"]
+    build:
+      context: admin-web
+      args:
+        VITE_API_URL: ${PUBLIC_BASE_URL}/api/v1
+    environment:
+      PORT: "3000"
+    ports:
+      - "3000:3000"
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [hotel-backend]
+
+  mailpit:
+    profiles: ["backend"]
+    image: axllent/mailpit:v1.27
+    ports:
+      - "8025:8025"
+    networks: [hotel-backend]
+
+  legacy-mysql:
+    profiles: ["migration"]
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: hotel_dumbria
+      MYSQL_USER: legacy_reader
+      MYSQL_PASSWORD: ${LEGACY_MYSQL_PASSWORD:-configura-el-secreto-legacy}
+      MYSQL_ROOT_PASSWORD: ${LEGACY_MYSQL_ROOT_PASSWORD:-configura-el-secreto-root-legacy}
+    volumes:
+      - ./legacy-import/input:/docker-entrypoint-initdb.d:ro
+      - legacy-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${LEGACY_MYSQL_ROOT_PASSWORD:-configura-el-secreto-root-legacy}"]
+      interval: 5s
+      timeout: 4s
+      retries: 30
+    networks: [hotel-backend]
+
+  legacy-import:
+    profiles: ["migration"]
+    build:
+      context: legacy-import
+    environment:
+      LEGACY_DATABASE_URL: mysql://legacy_reader:${LEGACY_MYSQL_PASSWORD:-configura-el-secreto-legacy}@legacy-mysql:3306/hotel_dumbria
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    depends_on:
+      legacy-mysql:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks: [hotel-backend]
+
+  android-build:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - gradle-cache:/opt/gradle-cache
+      - ./app/build/outputs:/workspace/app/build/outputs
+
+  emulator-api16:
+    profiles: ["api16"]
+    build:
+      context: docker/android-emulator
+      args:
+        ANDROID_API: "16"
+        SYSTEM_IMAGE_TAG: "default"
+        SYSTEM_IMAGE_ARCH: "x86"
+    device_cgroup_rules:
+      - "c 10:232 rwm"
+    devices:
+      - /dev/kvm:/dev/kvm
+    environment:
+      AVD_NAME: hotel_api16
+      EMULATOR_MEMORY: "1536"
+    ports:
+      - "127.0.0.1:5565:5555"
+      - "127.0.0.1:6080:6080"
+    volumes:
+      - emulator-api16-data:/root/.android
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  emulator-api29:
+    profiles: ["api29"]
+    build:
+      context: docker/android-emulator
+      args:
+        ANDROID_API: "29"
+        SYSTEM_IMAGE_TAG: "google_apis"
+        SYSTEM_IMAGE_ARCH: "x86_64"
+    device_cgroup_rules:
+      - "c 10:232 rwm"
+    devices:
+      - /dev/kvm:/dev/kvm
+    environment:
+      AVD_NAME: hotel_api29
+      EMULATOR_MEMORY: "2048"
+    ports:
+      - "127.0.0.1:5575:5555"
+      - "127.0.0.1:6080:6080"
+    volumes:
+      - emulator-api29-data:/root/.android
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  emulator-api36:
+    profiles: ["api36"]
+    build:
+      context: docker/android-emulator
+      args:
+        ANDROID_API: "36"
+        SYSTEM_IMAGE_TAG: "google_apis"
+        SYSTEM_IMAGE_ARCH: "x86_64"
+    device_cgroup_rules:
+      - "c 10:232 rwm"
+    devices:
+      - /dev/kvm:/dev/kvm
+    environment:
+      AVD_NAME: hotel_api36
+      EMULATOR_MEMORY: "3072"
+    ports:
+      - "127.0.0.1:5585:5555"
+      - "127.0.0.1:6080:6080"
+    volumes:
+      - emulator-api36-data:/root/.android
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  postgres-data:
+  avatar-data:
+  legacy-mysql-data:
+  gradle-cache:
+  emulator-api16-data:
+  emulator-api29-data:
+  emulator-api36-data:
+
+networks:
+  hotel-backend:
+    driver: bridge

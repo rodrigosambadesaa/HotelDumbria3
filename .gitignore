@@ -1,0 +1,15 @@
+.env
+admin-web/.git-local-starter/
+admin-web/.openai-local-starter/
+.idea/
+.gradle/
+local.properties
+**/build/
+backend/node_modules/
+admin-web/node_modules/
+admin-web/.next/
+admin-web/.vinext/
+admin-web/dist/
+admin-web/.wrangler/
+legacy-import/input/
+*.log

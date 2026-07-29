@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#151965"
+    tools:context=".ActivityContacto">
+
+   <Button
+       android:id="@+id/btn_llamar"
+       android:layout_centerVertical="true"
+       android:layout_centerHorizontal="true"
+       android:layout_width="wrap_content"
+       android:layout_height="wrap_content"
+       android:text="Llamar al hotel"/>
+
+   <Button
+      android:id="@+id/btn_enviar_email"
+       android:layout_width="wrap_content"
+       android:layout_height="wrap_content"
+       android:layout_below="@id/btn_llamar"
+       android:layout_centerHorizontal="true"
+       android:layout_centerVertical="true"
+      android:text="Enviar un email"></Button>
+
+</RelativeLayout>
