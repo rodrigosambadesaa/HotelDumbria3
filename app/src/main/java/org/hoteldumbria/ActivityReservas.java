@@ -39,6 +39,7 @@ import java.util.Locale;
 
 public class ActivityReservas extends Fragment implements DatePickerDialog.OnDateSetListener {
     private boolean internetVerified;
+    private ConnectivityAndInternetAccess.Request internetAccessRequest;
 
     private static final int SOLICITUD_CONFIRMACION_RESERVA = 2;
     private static final int SOLICITUD_CIERRE_SESION = 3;
@@ -172,7 +173,7 @@ public class ActivityReservas extends Fragment implements DatePickerDialog.OnDat
 
         getImbtn_confirmar_reservas().setOnClickListener(v -> {
             if (!internetVerified) {
-                Utilidades.comprobarAccesoAInternet(requireContext(), (reachable, reachedHost) -> {
+                internetAccessRequest = Utilidades.comprobarAccesoAInternet(requireContext(), (reachable, reachedHost) -> {
                     if (reachable && isAdded()) {
                         internetVerified = true;
                         getImbtn_confirmar_reservas().performClick();
@@ -256,7 +257,7 @@ public class ActivityReservas extends Fragment implements DatePickerDialog.OnDat
 
         getBtn_reservar().setOnClickListener(v -> {
             if (!internetVerified) {
-                Utilidades.comprobarAccesoAInternet(requireContext(), (reachable, reachedHost) -> {
+                internetAccessRequest = Utilidades.comprobarAccesoAInternet(requireContext(), (reachable, reachedHost) -> {
                     if (reachable && isAdded()) {
                         internetVerified = true;
                         getBtn_reservar().performClick();
@@ -573,6 +574,16 @@ public class ActivityReservas extends Fragment implements DatePickerDialog.OnDat
     @Override
     public void onDateSet(DatePicker view, int year, int month, int dayOfMonth) {
 
+    }
+
+    @Override
+    public void onDestroyView() {
+        if (internetAccessRequest != null) {
+            internetAccessRequest.cancel();
+            internetAccessRequest = null;
+        }
+        internetVerified = false;
+        super.onDestroyView();
     }
 
     /* After user decided on a time, save them into our calendar instance, and now parse what our calendar has into the TextView */

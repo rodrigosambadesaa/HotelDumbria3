@@ -46,6 +46,10 @@ import java.util.regex.Pattern;
 
 public class Utilidades {
 
+    public interface InternetAccessCallback {
+        void onResult(boolean reachable, String reachedEndpoint);
+    }
+
     private static final int LONGITUD_MINIMA_CLAVE = 8;
 
     public static boolean validarNif(String nif) {
@@ -430,15 +434,17 @@ public class Utilidades {
         return str;
     }
 
-    public static boolean hayConexionDeRed(Context contexto) {
-        return InternetConnectivity.hasNetwork(contexto);
-    }
-
-    public static void comprobarAccesoAInternet(
+    public static ConnectivityAndInternetAccess.Request comprobarAccesoAInternet(
             Context contexto,
-            InternetConnectivity.Callback callback
+            InternetAccessCallback callback
     ) {
-        InternetConnectivity.check(contexto, callback);
+        return ConnectivityAndInternetAccess.checkInternetAsync(
+                contexto,
+                result -> callback.onResult(
+                        result.isReachable(),
+                        result.getReachedHost()
+                )
+        );
     }
 
 }

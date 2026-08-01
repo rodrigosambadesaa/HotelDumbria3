@@ -41,6 +41,7 @@ import static android.app.Activity.RESULT_OK;
 
 public class ActivityDatos extends Fragment {
     private boolean internetVerified;
+    private ConnectivityAndInternetAccess.Request internetAccessRequest;
 
 
 
@@ -419,7 +420,7 @@ public class ActivityDatos extends Fragment {
                                 getImagen()));
                         getPg().setVisibility(View.VISIBLE);
                         if (!internetVerified) {
-                            Utilidades.comprobarAccesoAInternet(getActivity(), (reachable, reachedHost) -> {
+                            internetAccessRequest = Utilidades.comprobarAccesoAInternet(requireContext(), (reachable, reachedHost) -> {
                                 if (reachable) {
                                     internetVerified = true;
                                     getBtn_aceptar().performClick();
@@ -532,7 +533,7 @@ public class ActivityDatos extends Fragment {
 
                         getPg().setVisibility(View.VISIBLE);
                         if (!internetVerified) {
-                            Utilidades.comprobarAccesoAInternet(getActivity(), (reachable, reachedHost) -> {
+                            internetAccessRequest = Utilidades.comprobarAccesoAInternet(requireContext(), (reachable, reachedHost) -> {
                                 if (reachable) {
                                     internetVerified = true;
                                     getBtn_aceptar().performClick();
@@ -967,6 +968,16 @@ public class ActivityDatos extends Fragment {
 
     private void setLongitude(double longitude) {
         this.longitude = longitude;
+    }
+
+    @Override
+    public void onDestroyView() {
+        if (internetAccessRequest != null) {
+            internetAccessRequest.cancel();
+            internetAccessRequest = null;
+        }
+        internetVerified = false;
+        super.onDestroyView();
     }
     /*
     @Override

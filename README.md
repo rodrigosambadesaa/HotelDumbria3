@@ -15,6 +15,15 @@ confirmación de borrado. El servidor la deriva con Argon2id
 (`m=19456,t=2,p=1`); los clientes no almacenan contraseñas y los hashes SHA del
 proyecto histórico no se importan.
 
+La comprobación de Internet de Android incorpora
+[`ConnectivityAndInternetAccess.java`](https://gist.github.com/rodrigosambadesaa/729cca29a031fef4e2f15751863b655f):
+consulta secuencialmente Cloudflare, Google DNS, Quad9 y OpenDNS y se detiene
+ante la primera respuesta DNS válida. Solo si fallan todos los servidores DNS
+prueba, también en orden y deteniéndose tras el primer éxito, los dominios de
+Google, Facebook, Wolfram Alpha, Apple y Amazon. Las Activities y Fragments
+usan el API asíncrono y cancelan las comprobaciones pendientes al abandonar su
+ciclo de vida visible.
+
 Empieza por [EJECUCION.md](EJECUCION.md). El modelo de amenazas y controles se
 documenta en [SECURITY.md](SECURITY.md), y la migración histórica en
 [legacy/MIGRACION.md](legacy/MIGRACION.md).
@@ -31,3 +40,6 @@ documenta en [SECURITY.md](SECURITY.md), y la migración histórica en
 | `docker/android-emulator/` | imágenes AVD con KVM |
 | `scripts/` | operación segura desde PowerShell/WSL2 |
 | `legacy/` | trazabilidad y diagrama del sistema original |
+
+La licencia y atribución de la implementación de conectividad importada se
+conservan en [docs/CONNECTIVITY_LICENSE.md](docs/CONNECTIVITY_LICENSE.md).

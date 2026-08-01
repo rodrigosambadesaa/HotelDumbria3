@@ -37,6 +37,7 @@ import java.util.HashMap;
 
 public class UploadImagenActivity extends AppCompatActivity {
     private boolean internetVerified;
+    private ConnectivityAndInternetAccess.Request internetAccessRequest;
 
     private JsonObjectRequest jsObjRequest;
     private static final String COLA_PETICIONES_LOGIN = "PeticionesPrueba";
@@ -439,7 +440,7 @@ public class UploadImagenActivity extends AppCompatActivity {
 
         if (!internetVerified) {
             final String nombreOriginal = nombreFichero;
-            Utilidades.comprobarAccesoAInternet(this, (reachable, reachedHost) -> {
+            internetAccessRequest = Utilidades.comprobarAccesoAInternet(this, (reachable, reachedHost) -> {
                 if (reachable) {
                     internetVerified = true;
                     uploadImagen(identificadorUsuario, bitmap, nombreOriginal);
@@ -488,6 +489,10 @@ public class UploadImagenActivity extends AppCompatActivity {
     @Override
     protected void onStop() {
         super.onStop();
+        if (internetAccessRequest != null) {
+            internetAccessRequest.cancel();
+            internetAccessRequest = null;
+        }
         if (getPeticionesRed() !=null) {  // Finalizamos peticiones pendientes
             getPeticionesRed().getColaPeticiones().cancelAll(getColaPeticionesUploadImagen());
         }

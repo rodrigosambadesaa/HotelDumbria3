@@ -28,6 +28,7 @@ import java.util.HashMap;
 
 public class ActivityLoginRegistro extends AppCompatActivity {
 
+    private ConnectivityAndInternetAccess.Request internetAccessRequest;
     private Button btn_entrar;
     private EditText edt_email;
     private EditText edt_clave;
@@ -168,7 +169,7 @@ public class ActivityLoginRegistro extends AppCompatActivity {
             boolean recordar,
             boolean limpiarPreferenciasSiFalla
     ) {
-        Utilidades.comprobarAccesoAInternet(this, (reachable, reachedHost) -> {
+        internetAccessRequest = Utilidades.comprobarAccesoAInternet(this, (reachable, reachedHost) -> {
             if (!reachable) {
                 getPg().setVisibility(View.INVISIBLE);
                 Log.w("ActivityLoginRegistro", "Ningún servidor de comprobación es alcanzable");
@@ -226,7 +227,7 @@ public class ActivityLoginRegistro extends AppCompatActivity {
     }
 
     private void refrescarSesion(String refreshToken) {
-        Utilidades.comprobarAccesoAInternet(this, (reachable, host) -> {
+        internetAccessRequest = Utilidades.comprobarAccesoAInternet(this, (reachable, host) -> {
             if (!reachable) {
                 getPg().setVisibility(View.INVISIBLE);
                 Toast.makeText(this, "Sin acceso real a Internet", Toast.LENGTH_LONG).show();
@@ -303,6 +304,10 @@ public class ActivityLoginRegistro extends AppCompatActivity {
     @Override
     protected void onStop() {
         super.onStop();
+        if (internetAccessRequest != null) {
+            internetAccessRequest.cancel();
+            internetAccessRequest = null;
+        }
         if (getPeticionesRed() != null) { // Finalizamos peticiones pendientes
             getPeticionesRed().getColaPeticiones().cancelAll(getColaPeticionesLogin());
         }

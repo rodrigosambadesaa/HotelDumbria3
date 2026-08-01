@@ -40,6 +40,7 @@ import java.util.Map;
 
 public class MainActivity extends AppCompatActivity {
     private boolean internetVerified;
+    private ConnectivityAndInternetAccess.Request internetAccessRequest;
     private static final int SOLICITUD_CONFIRMACION_RESERVA = 2;
     private static final int SOLICITUD_CIERRE_SESION = 3;
 
@@ -153,7 +154,7 @@ public class MainActivity extends AppCompatActivity {
                 startActivityForResult(intentUpload, getSolicitudActualizacionImagenPerfil());
             }
         });
-        Utilidades.comprobarAccesoAInternet(this, (reachable, reachedHost) ->
+        internetAccessRequest = Utilidades.comprobarAccesoAInternet(this, (reachable, reachedHost) ->
                 Log.d("Internet", reachable
                         ? "Acceso verificado mediante " + reachedHost
                         : "Ningún servidor de comprobación alcanzable"));
@@ -261,7 +262,7 @@ public class MainActivity extends AppCompatActivity {
 
             case R.id.borrar_perfil:
                 if (!internetVerified) {
-                    Utilidades.comprobarAccesoAInternet(this, (reachable, reachedHost) -> {
+                    internetAccessRequest = Utilidades.comprobarAccesoAInternet(this, (reachable, reachedHost) -> {
                         if (reachable) {
                             internetVerified = true;
                             onOptionsItemSelected(item);
@@ -342,6 +343,15 @@ public class MainActivity extends AppCompatActivity {
         login.setAction("cierre_sesion");
         startActivity(login);
         finish();
+    }
+
+    @Override
+    protected void onStop() {
+        if (internetAccessRequest != null) {
+            internetAccessRequest.cancel();
+            internetAccessRequest = null;
+        }
+        super.onStop();
     }
 
     private void cargarAvatarAutenticado() {

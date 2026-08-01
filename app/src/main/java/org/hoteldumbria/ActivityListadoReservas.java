@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Locale;
 
 public class ActivityListadoReservas extends Fragment {
+    private ConnectivityAndInternetAccess.Request internetAccessRequest;
     private ListView lv_reservas;
     private ArrayAdapterReservasHabitaciones arrayAdapterReservasHabitaciones;
     private List<ReservaListado> habitacionesDescargadas;
@@ -43,7 +44,7 @@ public class ActivityListadoReservas extends Fragment {
 
         setPeticionesRed(PeticionesRed.getInstancia(getActivity()));
 
-        Utilidades.comprobarAccesoAInternet(requireContext(), (reachable, reachedHost) -> {
+        internetAccessRequest = Utilidades.comprobarAccesoAInternet(requireContext(), (reachable, reachedHost) -> {
             if (reachable && isAdded()) {
                 cargarReservas(layout);
             } else if (isAdded()) {
@@ -51,6 +52,15 @@ public class ActivityListadoReservas extends Fragment {
             }
         });
         return layout;
+    }
+
+    @Override
+    public void onDestroyView() {
+        if (internetAccessRequest != null) {
+            internetAccessRequest.cancel();
+            internetAccessRequest = null;
+        }
+        super.onDestroyView();
     }
 
     private void cargarReservas(View layout) {
