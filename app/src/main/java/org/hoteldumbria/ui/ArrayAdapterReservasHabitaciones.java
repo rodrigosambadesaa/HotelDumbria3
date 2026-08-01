@@ -8,6 +8,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.TextView;
+import android.widget.Button;
 
 
 import org.hoteldumbria.PeticionesRed;
@@ -29,14 +30,27 @@ public class ArrayAdapterReservasHabitaciones extends ArrayAdapter <ReservaLista
     }
 
     private boolean ocultarCheckboxes;
+    private final CancellationListener cancellationListener;
+
+    public interface CancellationListener {
+        void onCancel(ReservaListado reservation);
+    }
 
     public ArrayAdapterReservasHabitaciones(Context contexto, int indice, List < ReservaListado > listaReservas, PeticionesRed peticionesRed) {
+        this(contexto, indice, listaReservas, peticionesRed, null);
+    }
+
+    public ArrayAdapterReservasHabitaciones(Context contexto, int indice,
+                                             List<ReservaListado> listaReservas,
+                                             PeticionesRed peticionesRed,
+                                             CancellationListener cancellationListener) {
         super(contexto, indice, listaReservas);
 
         setActivity((Activity) contexto);
         setIdLayoutHabitaciones(indice);
         setReservas(listaReservas);
         this.setPeticionesRed(peticionesRed);
+        this.cancellationListener = cancellationListener;
     }
 
     public List<ReservaListado> getReservas() {
@@ -57,6 +71,7 @@ public class ArrayAdapterReservasHabitaciones extends ArrayAdapter <ReservaLista
             referenciasLayoutHabitaciones.setTv_numero_habitacion_reservada(layoutReservas.findViewById(R.id.tv_numero_habitacion_reservada));
             referenciasLayoutHabitaciones.setTv_fecha_entrada(layoutReservas.findViewById(R.id.tv_fecha_entrada));
             referenciasLayoutHabitaciones.setTv_fecha_salida(layoutReservas.findViewById(R.id.tv_fecha_salida));
+            referenciasLayoutHabitaciones.cancelButton = layoutReservas.findViewById(R.id.button_cancel_reservation);
 
             referenciasLayoutHabitaciones.getTv_fecha_salida().setTextColor(Color.parseColor("#ff7315"));
             referenciasLayoutHabitaciones.getTv_fecha_entrada().setTextColor(Color.parseColor("#ff7315"));
@@ -71,11 +86,17 @@ public class ArrayAdapterReservasHabitaciones extends ArrayAdapter <ReservaLista
         }
 
         ReservaListado reserva = getReservas().get(posicion);
+        String roomLabel = reserva.getRoomName() == null || reserva.getRoomName().isEmpty()
+                ? "Habitación " + reserva.getNumero() : reserva.getRoomName();
         referenciasLayoutHabitaciones.getTv_numero_habitacion_reservada().setText(
-                "Habitación reservada: " + reserva.getNumero());
+                roomLabel + " · " + localizedStatus(reserva.getStatus()));
         SimpleDateFormat simpleDateFormat = new SimpleDateFormat("dd-MM-yyyy");
         referenciasLayoutHabitaciones.getTv_fecha_entrada().setText("Fecha de entrada: " + simpleDateFormat.format(reserva.getFecha_entrada().getTime()));
         referenciasLayoutHabitaciones.getTv_fecha_salida().setText("Fecha de salida: " + simpleDateFormat.format(reserva.getFecha_salida().getTime()));
+        boolean cancellable = "pending".equals(reserva.getStatus()) || "confirmed".equals(reserva.getStatus());
+        referenciasLayoutHabitaciones.cancelButton.setVisibility(cancellable ? View.VISIBLE : View.GONE);
+        referenciasLayoutHabitaciones.cancelButton.setOnClickListener(cancellationListener == null
+                ? null : view -> cancellationListener.onCancel(reserva));
 
         /*referenciasLayoutHabitaciones.tarea = new AsignaImagenDeURL(referenciasLayoutHabitaciones.imageViewImagenAsociada, activity);
         String descripcion = reserva.getDescripcion();
@@ -94,6 +115,14 @@ public class ArrayAdapterReservasHabitaciones extends ArrayAdapter <ReservaLista
 
         return layoutReservas;
 
+    }
+
+    private String localizedStatus(String status) {
+        if ("pending".equals(status)) return "Pendiente";
+        if ("confirmed".equals(status)) return "Confirmada";
+        if ("cancelled".equals(status)) return "Cancelada";
+        if ("completed".equals(status)) return "Completada";
+        return status == null ? "" : status;
     }
 
     public Activity getActivity() {
@@ -143,6 +172,7 @@ public class ArrayAdapterReservasHabitaciones extends ArrayAdapter <ReservaLista
         private TextView tv_numero_habitacion_reservada;
         private TextView tv_fecha_entrada;
         private TextView tv_fecha_salida;
+        private Button cancelButton;
 
         public TextView getTv_numero_habitacion_reservada() {
             return tv_numero_habitacion_reservada;

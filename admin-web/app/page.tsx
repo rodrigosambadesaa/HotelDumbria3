@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 const API = import.meta.env.VITE_API_URL ?? "http://localhost:8080/api/v1";
 
@@ -49,6 +49,10 @@ type Audit = {
   metadata: Record<string, unknown>;
   createdAt: string;
 };
+type Session = { accessToken: string; user: { role: string } };
+type Page<T> = { data: T[]; nextCursor: string | null };
+
+let refreshInFlight: Promise<Session> | null = null;
 
 function readCookie(name: string) {
   if (typeof document === "undefined") return "";
@@ -60,7 +64,25 @@ function readCookie(name: string) {
     ?.slice(prefix.length) ?? "";
 }
 
+function refreshWebSession(): Promise<Session> {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = fetch(`${API}/auth/web/refresh`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json", "x-csrf-token": readCookie("hd_csrf") },
+    body: "{}"
+  }).then(async (response) => {
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.message || "Sesión caducada");
+    return payload as Session;
+  }).finally(() => {
+    refreshInFlight = null;
+  });
+  return refreshInFlight;
+}
+
 export default function AdminPortal() {
+  const sessionEpoch = useRef(0);
   const [token, setToken] = useState("");
   const [role, setRole] = useState("");
   const [view, setView] = useState<View>("overview");
@@ -69,26 +91,39 @@ export default function AdminPortal() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [audits, setAudits] = useState<Audit[]>([]);
+  const [reservationCursor, setReservationCursor] = useState<string | null>(null);
+  const [userCursor, setUserCursor] = useState<string | null>(null);
+  const [auditCursor, setAuditCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const api = useCallback(async <T,>(route: string, options: RequestInit = {}): Promise<T> => {
-    const response = await fetch(`${API}${route}`, {
+    const send = (accessToken: string) => fetch(`${API}${route}`, {
       ...options,
       credentials: "include",
       headers: {
         "content-type": "application/json",
-        ...(token ? { authorization: `Bearer ${token}` } : {}),
+        ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
         ...options.headers
       }
     });
+    let response = await send(token);
+    if (response.status === 401 && token) {
+      const epoch = sessionEpoch.current;
+      const session = await refreshWebSession();
+      if (sessionEpoch.current !== epoch) throw new Error("La sesión se ha cerrado");
+      if (!["admin", "staff"].includes(session.user.role)) throw new Error("Acceso no autorizado");
+      setToken(session.accessToken);
+      setRole(session.user.role);
+      response = await send(session.accessToken);
+    }
     if (response.status === 204) return undefined as T;
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.message || "No se pudo completar la operación");
     return payload as T;
   }, [token]);
 
-  const loadDashboard = useCallback(async (accessToken: string, userRole: string) => {
+  const loadDashboard = useCallback(async (accessToken: string, userRole: string, expectedEpoch: number) => {
     const request = async <T,>(route: string): Promise<T> => {
       const response = await fetch(`${API}${route}`, {
         headers: { authorization: `Bearer ${accessToken}` },
@@ -100,52 +135,57 @@ export default function AdminPortal() {
     };
     const [summaryData, reservationData, roomData] = await Promise.all([
       request<Summary>("/admin/summary"),
-      request<{ data: Reservation[] }>("/admin/reservations"),
+      request<Page<Reservation>>("/admin/reservations"),
       request<{ data: Room[] }>("/admin/rooms")
     ]);
+    if (sessionEpoch.current !== expectedEpoch) return;
     setSummary(summaryData);
     setReservations(reservationData.data);
+    setReservationCursor(reservationData.nextCursor);
     setRooms(roomData.data);
     if (userRole === "admin") {
       const [userData, auditData] = await Promise.all([
-        request<{ data: User[] }>("/admin/users"),
-        request<{ data: Audit[] }>("/admin/audit")
+        request<Page<User>>("/admin/users"),
+        request<Page<Audit>>("/admin/audit")
       ]);
+      if (sessionEpoch.current !== expectedEpoch) return;
       setUsers(userData.data);
       setAudits(auditData.data);
+      setUserCursor(userData.nextCursor);
+      setAuditCursor(auditData.nextCursor);
     }
   }, []);
 
   useEffect(() => {
+    const epoch = sessionEpoch.current;
     const csrf = readCookie("hd_csrf");
     if (!csrf) {
       setLoading(false);
       return;
     }
-    fetch(`${API}/auth/refresh`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "content-type": "application/json", "x-csrf-token": csrf },
-      body: "{}"
-    })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("Sesión caducada");
-        const session = await response.json();
+    refreshWebSession()
+      .then(async (session) => {
+        if (sessionEpoch.current !== epoch) return;
         setToken(session.accessToken);
         setRole(session.user.role);
-        await loadDashboard(session.accessToken, session.user.role);
+        await loadDashboard(session.accessToken, session.user.role, epoch);
       })
-      .catch(() => setToken(""))
-      .finally(() => setLoading(false));
+      .catch(() => {
+        if (sessionEpoch.current === epoch) setToken("");
+      })
+      .finally(() => {
+        if (sessionEpoch.current === epoch) setLoading(false);
+      });
   }, [loadDashboard]);
 
   async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
     setLoading(true);
+    const epoch = ++sessionEpoch.current;
     const form = new FormData(event.currentTarget);
     try {
-      const response = await fetch(`${API}/auth/login`, {
+      const response = await fetch(`${API}/auth/web/login`, {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
@@ -156,18 +196,23 @@ export default function AdminPortal() {
       if (!["admin", "staff"].includes(session.user.role)) {
         throw new Error("Esta cuenta no tiene acceso al panel");
       }
+      if (sessionEpoch.current !== epoch) return;
       setToken(session.accessToken);
       setRole(session.user.role);
-      await loadDashboard(session.accessToken, session.user.role);
+      await loadDashboard(session.accessToken, session.user.role, epoch);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Error de autenticación");
+      if (sessionEpoch.current === epoch) {
+        setError(cause instanceof Error ? cause.message : "Error de autenticación");
+      }
     } finally {
-      setLoading(false);
+      if (sessionEpoch.current === epoch) setLoading(false);
     }
   }
 
   async function logout() {
-    await fetch(`${API}/auth/logout`, {
+    sessionEpoch.current += 1;
+    if (refreshInFlight) await refreshInFlight.catch(() => undefined);
+    await fetch(`${API}/auth/web/logout`, {
       method: "POST",
       credentials: "include",
       headers: { "content-type": "application/json", "x-csrf-token": readCookie("hd_csrf") },
@@ -175,13 +220,22 @@ export default function AdminPortal() {
     }).catch(() => {});
     setToken("");
     setRole("");
+    setSummary(null);
+    setReservations([]);
+    setRooms([]);
+    setUsers([]);
+    setAudits([]);
   }
 
   async function changeReservationStatus(id: string, status: string) {
     try {
+      const reason = status === "cancelled"
+        ? window.prompt("Indica el motivo de la cancelación (mínimo 3 caracteres):")
+        : undefined;
+      if (status === "cancelled" && (!reason || reason.trim().length < 3)) return;
       await api(`/admin/reservations/${id}`, {
         method: "PATCH",
-        body: JSON.stringify({ status })
+        body: JSON.stringify({ status, ...(reason ? { reason: reason.trim() } : {}) })
       });
       setReservations((current) => current.map((item) => item.id === id ? { ...item, status } : item));
     } catch (cause) {
@@ -234,12 +288,27 @@ export default function AdminPortal() {
   }
 
   async function deleteUser(user: User) {
-    if (!window.confirm(`¿Eliminar a ${user.name}? Se borrarán también sus reservas y perfil.`)) return;
+    if (!window.confirm(`¿Anonimizar a ${user.name}? Se revocará su acceso y se conservará el historial de reservas sin datos personales.`)) return;
     try {
       await api(`/admin/users/${user.id}`, { method: "DELETE" });
       setUsers((current) => current.filter((item) => item.id !== user.id));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No se pudo eliminar el usuario");
+    }
+  }
+
+  async function loadMore<T>(
+    route: string,
+    cursor: string,
+    append: (update: (current: T[]) => T[]) => void,
+    saveCursor: (next: string | null) => void
+  ) {
+    try {
+      const page = await api<Page<T>>(`${route}?cursor=${encodeURIComponent(cursor)}`);
+      append((current) => [...current, ...page.data]);
+      saveCursor(page.nextCursor);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo cargar la página siguiente");
     }
   }
 
@@ -323,6 +392,9 @@ export default function AdminPortal() {
             <div className="panel-title"><div><p className="eyebrow">OPERACIONES</p><h2>Gestión de reservas</h2></div>
               <span className="count">{reservations.length} registros</span></div>
             <ReservationTable reservations={reservations} onStatus={changeReservationStatus} />
+            {reservationCursor && <button className="secondary" onClick={() => loadMore<Reservation>(
+              "/admin/reservations", reservationCursor, setReservations, setReservationCursor
+            )}>Cargar más</button>}
           </section>
         )}
 
@@ -361,6 +433,9 @@ export default function AdminPortal() {
               <tbody>{users.map((user) => <tr key={user.id}><td><strong>{user.name}</strong><small>{user.email}</small></td>
                 <td><span className="pill">{user.role}</span></td><td>{user.emailVerifiedAt ? "Confirmada" : "Pendiente"}</td>
                 <td>{formatDate(user.createdAt)}</td><td><button className="danger-link" onClick={() => deleteUser(user)}>Eliminar</button></td></tr>)}</tbody></table></div>
+            {userCursor && <button className="secondary" onClick={() => loadMore<User>(
+              "/admin/users", userCursor, setUsers, setUserCursor
+            )}>Cargar más</button>}
           </section>
         )}
 
@@ -368,6 +443,9 @@ export default function AdminPortal() {
           <section className="panel"><div className="panel-title"><div><p className="eyebrow">SEGURIDAD</p><h2>Registro de auditoría</h2></div></div>
             <div className="timeline">{audits.map((entry) => <article key={entry.id}><span /><div><strong>{entry.action}</strong>
               <p>{entry.targetType || "sistema"} {entry.targetId ? `· ${entry.targetId}` : ""}</p></div><time>{formatDateTime(entry.createdAt)}</time></article>)}</div>
+            {auditCursor && <button className="secondary" onClick={() => loadMore<Audit>(
+              "/admin/audit", auditCursor, setAudits, setAuditCursor
+            )}>Cargar más</button>}
           </section>
         )}
       </section>

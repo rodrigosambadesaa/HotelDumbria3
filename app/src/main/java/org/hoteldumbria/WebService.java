@@ -7,15 +7,19 @@ public final class WebService {
     private WebService() {}
 
     public static String getBaseUrl() { return BASE; }
-    public static String getLoginUrl() { return BASE + "/auth/login"; }
-    public static String getRefreshUrl() { return BASE + "/auth/refresh"; }
-    public static String getLogoutUrl() { return BASE + "/auth/logout"; }
+    public static String getLoginUrl() { return BASE + "/auth/mobile/login"; }
+    public static String getRefreshUrl() { return BASE + "/auth/mobile/refresh"; }
+    public static String getLogoutUrl() { return BASE + "/auth/mobile/logout"; }
     public static String getRegistrationUrl() { return BASE + "/auth/register"; }
     public static String getMeUrl() { return BASE + "/users/me"; }
     public static String getAvatarUrl() { return BASE + "/users/me/avatar"; }
     public static String getAvailabilityUrl() { return BASE + "/rooms/availability"; }
     public static String getReservationsUrl() { return BASE + "/reservations"; }
+    public static String getBulkReservationsUrl() { return BASE + "/reservations/bulk"; }
     public static String getMyReservationsUrl() { return BASE + "/reservations/me"; }
+    public static String getCancelReservationUrl(String reservationId) {
+        return BASE + "/reservations/" + reservationId + "/cancel";
+    }
 
     public static String getURL_Habitaciones() { return getAvailabilityUrl(); }
     public static String getURL_Reserva_Habitaciones() { return getReservationsUrl(); }

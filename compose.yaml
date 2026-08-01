@@ -55,6 +55,7 @@ services:
         VITE_API_URL: ${PUBLIC_BASE_URL}/api/v1
     environment:
       PORT: "3000"
+      ADMIN_API_ORIGIN: ${PUBLIC_BASE_URL}
     ports:
       - "3000:3000"
     init: true

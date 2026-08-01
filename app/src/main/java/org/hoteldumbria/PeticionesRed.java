@@ -9,6 +9,7 @@ import androidx.collection.LruCache;
 import com.android.volley.Request;
 import com.android.volley.RequestQueue;
 import com.android.volley.toolbox.ImageLoader;
+import com.android.volley.toolbox.HurlStack;
 import com.android.volley.toolbox.Volley;
 
 
@@ -19,7 +20,7 @@ public class PeticionesRed {
     private static Context mCtx;
 
     private PeticionesRed(Context context) {
-        setmCtx(context);
+        setmCtx(context.getApplicationContext());
         setMcolaPeticiones(getColaPeticiones());
 
         setmImageLoader(new ImageLoader(getMcolaPeticiones(),
@@ -67,7 +68,13 @@ public class PeticionesRed {
             /* getApplicationContext() es importante, evita perder el objeto si el
               contexto es activity o BroadcastReceiver
              */
-            setMcolaPeticiones(Volley.newRequestQueue(getmCtx().getApplicationContext()));
+            setMcolaPeticiones(Volley.newRequestQueue(
+                    getmCtx(),
+                    new HurlStack(
+                            null,
+                            ConnectivityAndInternetAccess.legacyTls12SocketFactory()
+                    )
+            ));
         }
         return getMcolaPeticiones();
     }

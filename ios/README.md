@@ -21,3 +21,8 @@ compila únicamente en macOS.
 Las contraseñas se envían únicamente a la API bajo TLS y el servidor las deriva
 con Argon2id. El llavero de iOS almacena solo el refresh token cuando se activa
 «Recordar sesión»; nunca almacena la contraseña.
+
+El cliente usa explícitamente las rutas `/auth/mobile/*`. La anonimización de
+cuenta conserva el historial mínimo de reservas. Este código no puede compilarse
+ni probarse en Windows/Docker: antes de publicar ejecuta build y pruebas con
+Xcode en macOS y valida el endpoint HTTPS de distribución.

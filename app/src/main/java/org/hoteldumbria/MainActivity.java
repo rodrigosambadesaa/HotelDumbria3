@@ -268,11 +268,7 @@ public class MainActivity extends AppCompatActivity {
                 break;
             */
             case R.id.cerrar_sesion:
-                Intent intentCierresesion = new Intent(this, ActivityLoginRegistro.class);
-                //intentActivityDatos.putExtra("usuario", usuarioRecibido);
-                intentCierresesion.setAction("cierre_sesion");
-                startActivity(intentCierresesion);
-                finish();
+                cerrarSesion();
                 break;
 
             case R.id.borrar_perfil:
@@ -310,7 +306,7 @@ public class MainActivity extends AppCompatActivity {
                             InputType.TYPE_TEXT_VARIATION_PASSWORD);
                     new AlertDialog.Builder(MainActivity.this)
                             .setTitle("Confirma tu identidad")
-                            .setMessage("Esta acción elimina el perfil, la cuenta, reservas y avatar.")
+                            .setMessage("Esta acción anonimiza tus datos personales, elimina el avatar, revoca las sesiones y desactiva la cuenta. El historial mínimo de reservas se conserva.")
                             .setView(password)
                             .setNegativeButton("Cancelar", null)
                             .setPositiveButton("Eliminar definitivamente", (confirmation, selected) -> {
@@ -321,6 +317,7 @@ public class MainActivity extends AppCompatActivity {
                                     return;
                                 }
                                 AuthenticatedJsonRequest request = new AuthenticatedJsonRequest(
+                                        this,
                                         Request.Method.DELETE,
                                         WebService.getMeUrl(),
                                         body,
@@ -360,6 +357,48 @@ public class MainActivity extends AppCompatActivity {
         finish();
     }
 
+    private void cerrarSesion() {
+        String refreshToken = SessionManager.getRefreshToken(this);
+        if (refreshToken == null || refreshToken.isEmpty()) {
+            finalizarCierreSesion();
+            return;
+        }
+        internetAccessRequest = Utilidades.comprobarAccesoAInternet(this, (reachable, reachedHost) -> {
+            internetAccessRequest = null;
+            if (!reachable) {
+                Toast.makeText(this,
+                        "Sesión local cerrada; no se pudo contactar con el servidor.",
+                        Toast.LENGTH_LONG).show();
+                finalizarCierreSesion();
+                return;
+            }
+            JSONObject body = new JSONObject();
+            try {
+                body.put("refreshToken", refreshToken);
+            } catch (Exception error) {
+                finalizarCierreSesion();
+                return;
+            }
+            JsonObjectRequest logout = new JsonObjectRequest(
+                    Request.Method.POST,
+                    WebService.getLogoutUrl(),
+                    body,
+                    response -> finalizarCierreSesion(),
+                    error -> finalizarCierreSesion()
+            );
+            logout.setTag("Logout");
+            getPeticionesRed().anhadirPeticionACola(logout);
+        });
+    }
+
+    private void finalizarCierreSesion() {
+        SessionManager.clear(this);
+        Intent login = new Intent(this, ActivityLoginRegistro.class);
+        login.setAction("cierre_sesion");
+        startActivity(login);
+        finish();
+    }
+
     @Override
     protected void onStop() {
         if (internetAccessRequest != null) {
@@ -370,6 +409,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void cargarAvatarAutenticado() {
+        cargarAvatarAutenticado(true);
+    }
+
+    private void cargarAvatarAutenticado(boolean mayRefresh) {
         NetworkImageView avatar = getNavigationView().getHeaderView(0)
                 .findViewById(R.id.imv_imagen_usuario);
         String accessToken = SessionManager.getAccessToken();
@@ -383,7 +426,16 @@ public class MainActivity extends AppCompatActivity {
                 512,
                 android.widget.ImageView.ScaleType.CENTER_CROP,
                 android.graphics.Bitmap.Config.RGB_565,
-                error -> Log.w("Avatar", "No hay avatar o no se pudo descargar", error)
+                error -> {
+                    if (mayRefresh && error.networkResponse != null
+                            && error.networkResponse.statusCode == 401) {
+                        SessionManager.refreshAccessToken(this, refreshed -> {
+                            if (refreshed && !isFinishing()) cargarAvatarAutenticado(false);
+                        });
+                        return;
+                    }
+                    Log.w("Avatar", "No hay avatar o no se pudo descargar", error);
+                }
         ) {
             @Override
             public Map<String, String> getHeaders() {

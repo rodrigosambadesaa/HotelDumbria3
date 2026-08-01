@@ -1,7 +1,6 @@
 package org.hoteldumbria;
 
 import android.content.Intent;
-import android.os.Build;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -19,7 +18,6 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
 import androidx.navigation.Navigation;
@@ -179,7 +177,7 @@ public class ActivityDatos extends Fragment {
         this.persona = persona;
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP) @Nullable
+    @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View layout = inflater.inflate(R.layout.activity_datos, container, false);
@@ -221,82 +219,58 @@ public class ActivityDatos extends Fragment {
 
             @Override
             public void afterTextChanged(Editable s) {
-                HashMap < String, String > parametros = new HashMap<>();
-                parametros.put("codigo_postal", getEdt_codigo_postal().getText().toString());
-
-                String urlPeticion = WebService.getURL_poblaciones_provincias() + Utilidades.generaParametrosURL(parametros);
-
+                String postalCode = getEdt_codigo_postal().getText().toString().trim();
+                getPeticionesRed().getColaPeticiones().cancelAll(getColaPeticionesLogin());
+                if (!postalCode.matches("^[0-9]{5}$")) {
+                    getLv_poblaciones_provincias().setVisibility(View.GONE);
+                    getTv_poblacion().setText("");
+                    getTv_provincia().setText("");
+                    return;
+                }
+                String urlPeticion = android.net.Uri.parse(
+                        WebService.getURL_poblaciones_provincias()
+                ).buildUpon().appendQueryParameter("postalCode", postalCode).build().toString();
+                getPg().setVisibility(View.VISIBLE);
                 JsonObjectRequest jsObjRequest = new JsonObjectRequest(Request.Method.GET, urlPeticion, null,
                         response -> {
-
+                            if (!isAdded()) return;
                             getPg().setVisibility(View.INVISIBLE);
-
-                            // Convertimos JSON a Objetos JAVA
                             try {
                                 Gson gson = new Gson();
-                                if (response.length() == 0) {
-                                    Log.e("Login", "Sin datos de respuesta del servidor");
+                                TypeToken < List < PoblacionesProvincias >> token =
+                                        new TypeToken < List < PoblacionesProvincias >> () {};
+                                setPoblacionesProvinciasDescargadas(gson.fromJson(
+                                        response.getJSONArray(WebService.JSON.DATA).toString(),
+                                        token.getType()
+                                ));
+                                if (getPoblacionesProvinciasDescargadas().isEmpty()) {
+                                    getLv_poblaciones_provincias().setVisibility(View.GONE);
+                                    getTv_poblacion().setText("");
+                                    getTv_provincia().setText("");
+                                } else if (getPoblacionesProvinciasDescargadas().size() == 1) {
+                                    getTv_poblacion().setText(getPoblacionesProvinciasDescargadas().get(0).getPoblacion());
+                                    getTv_provincia().setText(getPoblacionesProvinciasDescargadas().get(0).getProvincia());
                                 } else {
-                                    String estado = response.getString(WebService.JSON.STATUS);
-                                    switch (estado) {
-                                        case WebService.JSON.SUCCESS:
-              /*Usuario usuarioRecibido = gson.fromJson(response.getString(WebService.JSON.DATA), Usuario.class);
-              if (usuarioRecibido != null) {
-
-                  Toast.makeText(getApplicationContext(), "Login Correcto", Toast.LENGTH_LONG).show();
-                  Intent intentActivityReservas = new Intent(ActivityLoginRegistro.this, ActivityReservas.class);
-                  intentActivityReservas.putExtra("usuario", usuarioRecibido);
-                  startActivity(intentActivityReservas);
-                  finish();
-              } else {
-                  Toast.makeText(getApplicationContext(), "El Usuario No Existe ", Toast.LENGTH_LONG).show();
-              }*/
-
-                                            TypeToken < List < PoblacionesProvincias >> token = new TypeToken < List < PoblacionesProvincias >> () {};
-                                            setPoblacionesProvinciasDescargadas(gson.fromJson(response.getString(WebService.JSON.DATA), token.getType()));
-                                            if (getPoblacionesProvinciasDescargadas() != null) {
-                                                getLv_poblaciones_provincias().setVisibility(View.VISIBLE);
-                                                if (getPoblacionesProvinciasDescargadas().size() == 1) {
-                                                    getTv_poblacion().setText(getPoblacionesProvinciasDescargadas().get(0).getPoblacion());
-                                                    getTv_provincia().setText(getPoblacionesProvinciasDescargadas().get(0).getProvincia());
-                                                } else {
-                                                    setArrayAdapterPoblacionesProvincias(new ArrayAdapterPoblacionesProvincias(getActivity(), R.layout.layout_poblacionesprovincias, getPoblacionesProvinciasDescargadas(), getPeticionesRed()));
-                                                    setLv_poblaciones_provincias(layout.findViewById(R.id.lv_poblaciones_provincias));
-                                                    getLv_poblaciones_provincias().setAdapter(getArrayAdapterPoblacionesProvincias());
-                                                    setDatosDialog(new AlertDialog.Builder(
-                                                            requireActivity()));
-                                                    getDatosDialog().setTitle("Seleccione población y provincia");
-                                                    getDatosDialog().setAdapter(getArrayAdapterPoblacionesProvincias(),
-                                                            (dialog, which) -> {
-                                                                getTv_poblacion().setText(getPoblacionesProvinciasDescargadas().get(which).getPoblacion());
-                                                                getTv_provincia().setText(getPoblacionesProvinciasDescargadas().get(which).getProvincia());
-                                                            });
-                                                    getDatosDialog().create().show();
-                                                }
-                                                Log.i("PoblacionesProvincias", "Descarga de poblaciones y provincias correcta");
-
-                                            }
-
-                                            break;
-                                        case WebService.JSON.ERROR:
-                                            Log.e("Login", "Error:" + response.getString(WebService.JSON.MESSAGE));
-                                            break;
-                                        case WebService.JSON.FAIL:
-                                            Log.e("Login", "Fallo: " + response.getString(WebService.JSON.DATA));
-                                            break;
-                                    }
+                                    setArrayAdapterPoblacionesProvincias(new ArrayAdapterPoblacionesProvincias(
+                                            getActivity(), R.layout.layout_poblacionesprovincias,
+                                            getPoblacionesProvinciasDescargadas(), getPeticionesRed()));
+                                    getLv_poblaciones_provincias().setAdapter(getArrayAdapterPoblacionesProvincias());
+                                    setDatosDialog(new AlertDialog.Builder(requireActivity()));
+                                    getDatosDialog().setTitle("Seleccione población y provincia");
+                                    getDatosDialog().setAdapter(getArrayAdapterPoblacionesProvincias(),
+                                            (dialog, which) -> {
+                                                getTv_poblacion().setText(getPoblacionesProvinciasDescargadas().get(which).getPoblacion());
+                                                getTv_provincia().setText(getPoblacionesProvinciasDescargadas().get(which).getProvincia());
+                                            });
+                                    getDatosDialog().create().show();
                                 }
-
                             } catch (Exception e) {
-                                e.printStackTrace();
-                                Log.e("Login", "Error al convertir JSON a Objetos JAVA");
+                                Log.e("PoblacionesProvincias", "Respuesta no válida", e);
                             }
-
                         }, error -> {
-
+                            if (!isAdded()) return;
                             getPg().setVisibility(View.INVISIBLE);
-                            Log.e("Login", "Error en la petición JSON: " + error.toString());
-
+                            Log.w("PoblacionesProvincias", "Consulta no disponible", error);
                         });
 
                 jsObjRequest.setTag(getColaPeticionesLogin()); // nombramos la petición
@@ -575,7 +549,7 @@ public class ActivityDatos extends Fragment {
 
 
 
-                        setJsObjRequest(new AuthenticatedJsonRequest(Request.Method.PUT, WebService.getMeUrl(), jsonUsuarioAActualizar,
+                        setJsObjRequest(new AuthenticatedJsonRequest(requireContext(), Request.Method.PUT, WebService.getMeUrl(), jsonUsuarioAActualizar,
                                 response -> {
                                     getPg().setVisibility(View.INVISIBLE);
                                     ((MainActivity) getActivity()).setUsuarioRecibido(getUsuarioAInsertar());
@@ -975,6 +949,12 @@ public class ActivityDatos extends Fragment {
             internetAccessRequest = null;
         }
         internetVerified = false;
+        if (getPeticionesRed() != null) {
+            getPeticionesRed().getColaPeticiones().cancelAll(getColaPeticionesLogin());
+            getPeticionesRed().getColaPeticiones().cancelAll(
+                    getColaPeticionesPoblacionesProvincias());
+            getPeticionesRed().getColaPeticiones().cancelAll(getColaPeticionesPrueba());
+        }
         super.onDestroyView();
     }
     /*

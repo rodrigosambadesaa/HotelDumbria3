@@ -2,7 +2,6 @@ package org.hoteldumbria;
 
 import android.app.Activity;
 import android.app.DatePickerDialog;
-import android.app.TimePickerDialog;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -13,7 +12,6 @@ import android.widget.Button;
 import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
-import android.widget.TimePicker;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -28,6 +26,7 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
 import org.json.JSONObject;
+import org.json.JSONArray;
 
 import java.text.SimpleDateFormat;
 import java.math.BigDecimal;
@@ -36,8 +35,12 @@ import java.util.Calendar;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.TimeZone;
 
 public class ActivityReservas extends Fragment implements DatePickerDialog.OnDateSetListener {
+    private static final int MAX_RESERVATION_NIGHTS = 30;
+    private static final int BOOKING_HORIZON_MONTHS = 18;
+    private static final TimeZone HOTEL_TIME_ZONE = TimeZone.getTimeZone("Europe/Madrid");
     private boolean internetVerified;
     private ConnectivityAndInternetAccess.Request internetAccessRequest;
 
@@ -66,12 +69,6 @@ public class ActivityReservas extends Fragment implements DatePickerDialog.OnDat
     private Calendar c;
     private Calendar fecha_entrada;
     private Calendar fecha_salida;
-    private SimpleDateFormat mSimpleDateFormat;
-    private Calendar mCalendar;
-    private Activity mActivity;
-    private TextView mDate;
-    private DatePickerDialog datePickerDialogFechaEntrada;
-    private DatePickerDialog datePickerDialogFechaSalida;
     private boolean selectingCheckIn;
 
     private AlertDialog.Builder datosDialog;
@@ -87,24 +84,31 @@ public class ActivityReservas extends Fragment implements DatePickerDialog.OnDat
                 date.get(Calendar.DAY_OF_MONTH));
     }
 
-    private void reservarHabitacion(Habitacion habitacion) {
+    private void reservarHabitaciones(List<Habitacion> habitaciones) {
         JSONObject body = new JSONObject();
         try {
-            body.put("roomId", habitacion.getNumero());
-            body.put("checkIn", formatDate(getFecha_entrada()));
-            body.put("checkOut", formatDate(getFecha_salida()));
-            body.put("guests", 1);
+            JSONArray reservations = new JSONArray();
+            for (Habitacion habitacion : habitaciones) {
+                JSONObject reservation = new JSONObject();
+                reservation.put("roomId", habitacion.getNumero());
+                reservation.put("checkIn", formatDate(getFecha_entrada()));
+                reservation.put("checkOut", formatDate(getFecha_salida()));
+                reservation.put("guests", 1);
+                reservations.put(reservation);
+            }
+            body.put("reservations", reservations);
         } catch (Exception error) {
             Toast.makeText(getActivity(), "No se pudo preparar la reserva", Toast.LENGTH_SHORT).show();
             return;
         }
         AuthenticatedJsonRequest request = new AuthenticatedJsonRequest(
+                requireContext(),
                 Request.Method.POST,
-                WebService.getReservationsUrl(),
+                WebService.getBulkReservationsUrl(),
                 body,
                 response -> {
                     getPg().setVisibility(View.INVISIBLE);
-                    Toast.makeText(getActivity(), "Reserva realizada correctamente", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(getActivity(), "Reservas realizadas correctamente", Toast.LENGTH_SHORT).show();
                 },
                 error -> {
                     getPg().setVisibility(View.INVISIBLE);
@@ -140,10 +144,17 @@ public class ActivityReservas extends Fragment implements DatePickerDialog.OnDat
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View layout = inflater.inflate(R.layout.activity_reservas,container,false);
         setPeticionesRed(PeticionesRed.getInstancia(getActivity()));
-        mActivity = getActivity();
         if (savedInstanceState != null) {
             setHabitacionesDescargadas((List < Habitacion > ) savedInstanceState.getSerializable("habitaciones"));
             setScrollVertical(savedInstanceState.getInt("scroll_vertical"));
+            if (savedInstanceState.containsKey("check_in")) {
+                fecha_entrada = hotelCalendar();
+                fecha_entrada.setTimeInMillis(savedInstanceState.getLong("check_in"));
+            }
+            if (savedInstanceState.containsKey("check_out")) {
+                fecha_salida = hotelCalendar();
+                fecha_salida.setTimeInMillis(savedInstanceState.getLong("check_out"));
+            }
         } else {
             setHabitacionesDescargadas(null);
         }
@@ -155,23 +166,21 @@ public class ActivityReservas extends Fragment implements DatePickerDialog.OnDat
         setTv_seleccion_fecha_entrada(layout.findViewById(R.id.tv_fecha_entrada));
         setTv_seleccion_fecha_salida(layout.findViewById(R.id.tv_fecha_salida));
 
-        //getTv_seleccion_fecha_salida().setVisibility(View.INVISIBLE);
-        mSimpleDateFormat = new SimpleDateFormat("dd/MM/yyyy h:mm:ss",
-                Locale.getDefault());
-
         getTv_seleccion_fecha_entrada().setOnClickListener(v -> {
-            showDatePickerDialog();
             selectingCheckIn = true;
+            showDatePickerDialog();
         });
 
         getTv_seleccion_fecha_salida().setOnClickListener(v -> {
-            showDatePickerDialog();
             selectingCheckIn = false;
+            showDatePickerDialog();
         });
+        renderSelectedDates();
 
         getPg().setVisibility(View.INVISIBLE);
 
         getImbtn_confirmar_reservas().setOnClickListener(v -> {
+            if (!validateSelectedDates()) return;
             if (!internetVerified) {
                 internetAccessRequest = Utilidades.comprobarAccesoAInternet(requireContext(), (reachable, reachedHost) -> {
                     if (reachable && isAdded()) {
@@ -185,21 +194,6 @@ public class ActivityReservas extends Fragment implements DatePickerDialog.OnDat
                 return;
             }
             internetVerified = false;
-            if (getFecha_entrada() == null) {
-                Toast.makeText(getActivity(), "Debe seleccionar la fecha de entrada", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            Calendar ahora = Calendar.getInstance();
-            if (getFecha_entrada().before(ahora) || getFecha_entrada().equals(ahora)) {
-                Toast.makeText(getActivity(), "La fecha de entrada debe ser posterior a la fecha actual", Toast.LENGTH_SHORT).show();
-                return;
-            } else if (getFecha_salida() == null) {
-                Toast.makeText(getActivity(), "Debe seleccionar la fecha de salida", Toast.LENGTH_SHORT).show();
-                return;
-            } else if (getFecha_entrada().after(getFecha_salida()) || getFecha_entrada().equals(getFecha_salida())) {
-                Toast.makeText(getActivity(), "La fecha de entrada debe ser anterior a la de salida", Toast.LENGTH_SHORT).show();
-                return;
-            }
 
             setHabitacionesAReservar(new ArrayList < > ());
             int indice = 0;
@@ -210,8 +204,9 @@ public class ActivityReservas extends Fragment implements DatePickerDialog.OnDat
                     }
                     indice++;
                 }
-            else{
+            else {
                 Toast.makeText(getActivity(), "Debe seleccionar alguna habitación", Toast.LENGTH_SHORT).show();
+                return;
             }
             if (getHabitacionesAReservar().size() > 0) {
                /* Intent intentActivityConfirmacionReservas = new Intent(getActivity(), ActivityConfirmacionReservas.class);
@@ -237,11 +232,7 @@ public class ActivityReservas extends Fragment implements DatePickerDialog.OnDat
                 arrayAdapterHabitaciones.setOcultarCheckboxes(true);
 
                 getDatosDialog().setPositiveButton("Confirmar Reserva",
-                        (dialog, which) -> {
-                            for (Habitacion habitacion : getHabitacionesAReservar()) {
-                                reservarHabitacion(habitacion);
-                            }
-                        });
+                        (dialog, which) -> reservarHabitaciones(getHabitacionesAReservar()));
                 getDatosDialog().setNegativeButton("Cancelar Reserva",
                         (dialog, which) -> Toast.makeText(getActivity(), "Reservas canceladas", Toast.LENGTH_SHORT).show());
 
@@ -256,6 +247,7 @@ public class ActivityReservas extends Fragment implements DatePickerDialog.OnDat
 
 
         getBtn_reservar().setOnClickListener(v -> {
+            if (!validateSelectedDates()) return;
             if (!internetVerified) {
                 internetAccessRequest = Utilidades.comprobarAccesoAInternet(requireContext(), (reachable, reachedHost) -> {
                     if (reachable && isAdded()) {
@@ -270,10 +262,6 @@ public class ActivityReservas extends Fragment implements DatePickerDialog.OnDat
             }
             internetVerified = false;
             if (getFecha_entrada()!= null && getFecha_salida() != null) {
-                if (getFecha_entrada().after(getFecha_salida()) || getFecha_entrada().equals(getFecha_salida())) {
-                    Toast.makeText(getActivity(), "La fecha de entrada debe ser anterior a la de salida", Toast.LENGTH_SHORT).show();
-                    return;
-                }
                 setListViewHabitaciones(layout.findViewById(R.id.listViewHabitaciones));
                 // Se lanza la tarea que descarga, generara la lista de noticias y al finalizar entregara al metodo onRecibeHabitaciones
                 getPg().setVisibility(View.VISIBLE);
@@ -288,8 +276,7 @@ public class ActivityReservas extends Fragment implements DatePickerDialog.OnDat
                         + "&guests=1";
                 JsonObjectRequest jsObjRequest = new JsonObjectRequest(Request.Method.GET, urlPeticion, null,
                         response -> {
-
-
+                            if (!isAdded() || getView() == null) return;
                             getPg().setVisibility(View.INVISIBLE);
 
                             try {
@@ -321,6 +308,7 @@ public class ActivityReservas extends Fragment implements DatePickerDialog.OnDat
                             }
 
                         }, error -> {
+                    if (!isAdded() || getView() == null) return;
 
                     //pg.setVisibility(View.INVISIBLE);
                     Log.e("DescargaHabitaciones", "Error en la petición JSON: " + error.toString());
@@ -370,35 +358,87 @@ public class ActivityReservas extends Fragment implements DatePickerDialog.OnDat
     }
 
     private void showDatePickerDialog() {
+        Calendar today = hotelCalendar();
+        Calendar maximum = hotelCalendar();
+        maximum.add(Calendar.MONTH, BOOKING_HORIZON_MONTHS);
+        Calendar initial = selectingCheckIn ? fecha_entrada : fecha_salida;
+        if (initial == null) initial = today;
         DatePickerDialog datePickerDialog = new DatePickerDialog(
                 getActivity(),
                 (view, year, month, dayOfMonth) -> {
-                    String date = "month/day/year: " + month + "/" + dayOfMonth + "/" + year;
+                    Calendar selected = hotelCalendar();
+                    selected.set(year, month, dayOfMonth, 0, 0, 0);
+                    selected.set(Calendar.MILLISECOND, 0);
                     if (selectingCheckIn) {
-                        fecha_entrada = Calendar.getInstance();
-                        fecha_entrada.set(Calendar.YEAR, year);
-                        fecha_entrada.set(Calendar.MONTH, month);
-                        fecha_entrada.set(Calendar.DAY_OF_MONTH, dayOfMonth);
-                        tv_seleccion_fecha_entrada.setText(date);
-                        new TimePickerDialog(mActivity, mTimeDataSet1,
-                                fecha_entrada.get(Calendar.HOUR_OF_DAY), fecha_entrada.get(Calendar.MINUTE),
-                                false).show();
+                        fecha_entrada = selected;
                     } else {
-                        fecha_salida = Calendar.getInstance();
-                        fecha_salida.set(Calendar.YEAR, year);
-                        fecha_salida.set(Calendar.MONTH, month);
-                        fecha_salida.set(Calendar.DAY_OF_MONTH, dayOfMonth);
-                        tv_seleccion_fecha_salida.setText(date);
-                        new TimePickerDialog(mActivity, mTimeDataSet2,
-                                fecha_salida.get(Calendar.HOUR_OF_DAY), fecha_salida.get(Calendar.MINUTE),
-                                false).show();
+                        fecha_salida = selected;
                     }
-
+                    renderSelectedDates();
                 },
-                Calendar.getInstance().get(Calendar.YEAR),
-                Calendar.getInstance().get(Calendar.MONTH),
-                Calendar.getInstance().get(Calendar.DAY_OF_MONTH));
+                initial.get(Calendar.YEAR),
+                initial.get(Calendar.MONTH),
+                initial.get(Calendar.DAY_OF_MONTH));
+        datePickerDialog.getDatePicker().setMinDate(today.getTimeInMillis());
+        datePickerDialog.getDatePicker().setMaxDate(maximum.getTimeInMillis());
         datePickerDialog.show();
+    }
+
+    private Calendar hotelCalendar() {
+        Calendar value = Calendar.getInstance(HOTEL_TIME_ZONE, Locale.US);
+        value.set(Calendar.HOUR_OF_DAY, 0);
+        value.set(Calendar.MINUTE, 0);
+        value.set(Calendar.SECOND, 0);
+        value.set(Calendar.MILLISECOND, 0);
+        return value;
+    }
+
+    private void renderSelectedDates() {
+        SimpleDateFormat format = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
+        format.setTimeZone(HOTEL_TIME_ZONE);
+        getTv_seleccion_fecha_entrada().setText(fecha_entrada == null
+                ? getString(R.string.check_in) : format.format(fecha_entrada.getTime()));
+        getTv_seleccion_fecha_salida().setText(fecha_salida == null
+                ? getString(R.string.check_out) : format.format(fecha_salida.getTime()));
+    }
+
+    private boolean validateSelectedDates() {
+        if (fecha_entrada == null || fecha_salida == null) {
+            Toast.makeText(getActivity(), "Debe seleccionar entrada y salida", Toast.LENGTH_SHORT).show();
+            return false;
+        }
+        Calendar today = hotelCalendar();
+        if (fecha_entrada.before(today)) {
+            Toast.makeText(getActivity(), "No se puede reservar en el pasado", Toast.LENGTH_SHORT).show();
+            return false;
+        }
+        int nights = daysBetween(fecha_entrada, fecha_salida);
+        if (nights <= 0) {
+            Toast.makeText(getActivity(), "La salida debe ser posterior a la entrada", Toast.LENGTH_SHORT).show();
+            return false;
+        }
+        if (nights > MAX_RESERVATION_NIGHTS) {
+            Toast.makeText(getActivity(), "La estancia máxima es de 30 noches", Toast.LENGTH_SHORT).show();
+            return false;
+        }
+        Calendar horizon = hotelCalendar();
+        horizon.add(Calendar.MONTH, BOOKING_HORIZON_MONTHS);
+        if (fecha_entrada.after(horizon)) {
+            Toast.makeText(getActivity(), "La fecha supera el horizonte de reserva", Toast.LENGTH_SHORT).show();
+            return false;
+        }
+        return true;
+    }
+
+    private int daysBetween(Calendar start, Calendar end) {
+        return (int) ((utcDay(end) - utcDay(start)) / 86_400_000L);
+    }
+
+    private long utcDay(Calendar source) {
+        Calendar utc = Calendar.getInstance(TimeZone.getTimeZone("UTC"), Locale.US);
+        utc.clear();
+        utc.set(source.get(Calendar.YEAR), source.get(Calendar.MONTH), source.get(Calendar.DAY_OF_MONTH));
+        return utc.getTimeInMillis();
     }
 
 
@@ -424,6 +464,8 @@ public class ActivityReservas extends Fragment implements DatePickerDialog.OnDat
             );
             outState.putInt("scroll_vertical", scrollVertical);
         }
+        if (fecha_entrada != null) outState.putLong("check_in", fecha_entrada.getTimeInMillis());
+        if (fecha_salida != null) outState.putLong("check_out", fecha_salida.getTimeInMillis());
     }
 
     private TextView getTv_titulo() {
@@ -583,30 +625,13 @@ public class ActivityReservas extends Fragment implements DatePickerDialog.OnDat
             internetAccessRequest = null;
         }
         internetVerified = false;
+        if (getPeticionesRed() != null) {
+            getPeticionesRed().getColaPeticiones().cancelAll(getColaReservas());
+            getPeticionesRed().getColaPeticiones().cancelAll(
+                    getColaPeticionesConfirmacionReserva());
+        }
         super.onDestroyView();
     }
-
-    /* After user decided on a time, save them into our calendar instance, and now parse what our calendar has into the TextView */
-    private final TimePickerDialog.OnTimeSetListener mTimeDataSet1 =
-            new TimePickerDialog.OnTimeSetListener() {
-        @Override
-        public void onTimeSet(TimePicker view, int hourOfDay, int minute) {
-            fecha_entrada.set(Calendar.HOUR_OF_DAY, hourOfDay);
-            fecha_entrada.set(Calendar.MINUTE, minute);
-            getTv_seleccion_fecha_entrada().setText(mSimpleDateFormat.format(fecha_entrada.getTime()));
-        }
-    };
-
-    /* After user decided on a time, save them into our calendar instance, and now parse what our calendar has into the TextView */
-    private final TimePickerDialog.OnTimeSetListener mTimeDataSet2 =
-            new TimePickerDialog.OnTimeSetListener() {
-                @Override
-                public void onTimeSet(TimePicker view, int hourOfDay, int minute) {
-                    fecha_salida.set(Calendar.HOUR_OF_DAY, hourOfDay);
-                    fecha_salida.set(Calendar.MINUTE, minute);
-                    getTv_seleccion_fecha_salida().setText(mSimpleDateFormat.format(fecha_salida.getTime()));
-                }
-            };
 
  /*@Override
  protected void onRestoreInstanceState(Bundle savedInstanceState) {

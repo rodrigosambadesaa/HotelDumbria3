@@ -68,8 +68,18 @@ public class VolleyMultipartRequest extends Request<NetworkResponse> {
      */
     protected Map<String, DataPart> getByteData() throws AuthFailureError {
         Map<String, DataPart> params = new HashMap<>();
-        params.put(getParametroFicheroParaUploadFichero(), new DataPart(getNombreFichero(), getBytesFichero()));
+        params.put(getParametroFicheroParaUploadFichero(), new DataPart(
+                sanitizeFileName(getNombreFichero()),
+                getBytesFichero(),
+                "image/png"
+        ));
         return params;
+    }
+
+    private static String sanitizeFileName(String fileName) {
+        if (fileName == null) return "avatar.png";
+        String safe = fileName.replace('\r', '_').replace('\n', '_').replace('"', '_');
+        return safe.trim().isEmpty() ? "avatar.png" : safe;
     }
 
 
@@ -112,9 +122,8 @@ public class VolleyMultipartRequest extends Request<NetworkResponse> {
 
             return bos.toByteArray();
         } catch (IOException e) {
-            e.printStackTrace();
+            throw new AuthFailureError("No se pudo construir el cuerpo multipart");
         }
-        return null;
     }
 
 
@@ -213,7 +222,7 @@ public class VolleyMultipartRequest extends Request<NetworkResponse> {
         int bytesRead = fileInputStream.read(buffer, 0, bufferSize);
 
         while (bytesRead > 0) {
-            dataOutputStream.write(buffer, 0, bufferSize);
+            dataOutputStream.write(buffer, 0, bytesRead);
             bytesAvailable = fileInputStream.available();
             bufferSize = Math.min(bytesAvailable, maxBufferSize);
             bytesRead = fileInputStream.read(buffer, 0, bufferSize);
@@ -290,9 +299,10 @@ public class VolleyMultipartRequest extends Request<NetworkResponse> {
         public DataPart() {
         }
 
-        DataPart(String name, byte[] data) {
+        DataPart(String name, byte[] data, String contentType) {
             fileName = name;
             content = data;
+            type = contentType;
         }
 
         String getFileName() {

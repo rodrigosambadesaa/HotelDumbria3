@@ -1,6 +1,7 @@
 package org.hoteldumbria;
 
 import android.annotation.SuppressLint;
+import android.annotation.TargetApi;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.net.Uri;
@@ -17,10 +18,15 @@ import android.widget.Toast;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.WebResourceError;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
+import android.webkit.CookieManager;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.lifecycle.Lifecycle;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -37,6 +43,16 @@ public final class ActivityLocalizacion extends AppCompatActivity
     private static final String MAP_FRAGMENT_TAG = "dumbria-map";
     private static final String STATE_INTERNET_VERIFIED =
             "location.internetVerified";
+    private static final String STATE_UI = "location.uiState";
+    private static final String STATE_PROVIDER = "location.provider";
+    private static final int UI_CHECKING = 0;
+    private static final int UI_LOADING = 1;
+    private static final int UI_READY = 2;
+    private static final int UI_NO_INTERNET = 3;
+    private static final int UI_ERROR = 4;
+    private static final int PROVIDER_NONE = 0;
+    private static final int PROVIDER_GOOGLE = 1;
+    private static final int PROVIDER_OPEN_STREET_MAP = 2;
     private static final double DUMBRIA_LATITUDE = 43.0094171900;
     private static final double DUMBRIA_LONGITUDE = -9.1152205111;
     private static final float MAP_ZOOM = 14.5f;
@@ -49,6 +65,9 @@ public final class ActivityLocalizacion extends AppCompatActivity
     private Button navigationButton;
     private WebView fallbackMap;
     private boolean internetVerified;
+    private int uiState = UI_CHECKING;
+    private int mapProvider = PROVIDER_NONE;
+    private int requestGeneration;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -74,18 +93,24 @@ public final class ActivityLocalizacion extends AppCompatActivity
                     STATE_INTERNET_VERIFIED,
                     false
             );
+            uiState = savedInstanceState.getInt(STATE_UI, UI_CHECKING);
+            mapProvider = savedInstanceState.getInt(STATE_PROVIDER, PROVIDER_NONE);
         }
 
         SupportMapFragment restoredMap =
                 (SupportMapFragment) getSupportFragmentManager()
                         .findFragmentByTag(MAP_FRAGMENT_TAG);
-        if (internetVerified) {
+        if (internetVerified && (uiState == UI_LOADING || uiState == UI_READY || uiState == UI_ERROR)) {
             showLoadingMapState();
-            if (restoredMap != null) {
+            if (mapProvider == PROVIDER_OPEN_STREET_MAP) {
+                loadOpenStreetMap();
+            } else if (restoredMap != null) {
                 restoredMap.getMapAsync(this);
             } else {
                 loadMap();
             }
+        } else if (uiState == UI_NO_INTERNET) {
+            showNoInternetState();
         } else {
             showCheckingInternetState();
         }
@@ -94,8 +119,13 @@ public final class ActivityLocalizacion extends AppCompatActivity
     @Override
     protected void onStart() {
         super.onStart();
-        if (!internetVerified && internetAccessRequest == null) {
+        if (!internetVerified && uiState == UI_CHECKING && internetAccessRequest == null) {
             verifyInternetAndLoadMap();
+        } else if (internetVerified && uiState == UI_LOADING
+                && mapProvider == PROVIDER_GOOGLE) {
+            SupportMapFragment map = (SupportMapFragment) getSupportFragmentManager()
+                    .findFragmentByTag(MAP_FRAGMENT_TAG);
+            if (map != null) map.getMapAsync(this);
         }
     }
 
@@ -103,14 +133,13 @@ public final class ActivityLocalizacion extends AppCompatActivity
         cancelInternetCheck();
         internetVerified = false;
         showCheckingInternetState();
+        final int generation = ++requestGeneration;
 
         internetAccessRequest = ConnectivityAndInternetAccess.checkInternetAsync(
                 this,
                 result -> {
+                    if (generation != requestGeneration || !canUpdateViews()) return;
                     internetAccessRequest = null;
-                    if (isFinishing()) {
-                        return;
-                    }
                     if (!result.isReachable()) {
                         showNoInternetState();
                         return;
@@ -124,9 +153,11 @@ public final class ActivityLocalizacion extends AppCompatActivity
 
     private void loadMap() {
         if (!isGoogleMapsKeyConfigured()) {
+            mapProvider = PROVIDER_OPEN_STREET_MAP;
             loadOpenStreetMap();
             return;
         }
+        mapProvider = PROVIDER_GOOGLE;
         SupportMapFragment mapFragment =
                 (SupportMapFragment) getSupportFragmentManager()
                         .findFragmentByTag(MAP_FRAGMENT_TAG);
@@ -165,9 +196,13 @@ public final class ActivityLocalizacion extends AppCompatActivity
 
         WebSettings settings = fallbackMap.getSettings();
         settings.setJavaScriptEnabled(true);
+        settings.setJavaScriptCanOpenWindowsAutomatically(false);
+        settings.setSupportMultipleWindows(false);
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(false);
         settings.setDomStorageEnabled(false);
+        settings.setDatabaseEnabled(false);
+        settings.setSaveFormData(false);
         settings.setGeolocationEnabled(false);
         settings.setAllowFileAccessFromFileURLs(false);
         settings.setAllowUniversalAccessFromFileURLs(false);
@@ -177,37 +212,18 @@ public final class ActivityLocalizacion extends AppCompatActivity
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             settings.setSafeBrowsingEnabled(true);
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            settings.setMediaPlaybackRequiresUserGesture(true);
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
+        }
+        CookieManager.getInstance().setAcceptCookie(false);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            CookieManager.getInstance().setAcceptThirdPartyCookies(fallbackMap, false);
+        }
 
-        fallbackMap.setWebViewClient(new WebViewClient() {
-            @Override
-            @SuppressWarnings("deprecation")
-            public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                return !isAllowedMapUri(Uri.parse(url));
-            }
-
-            @Override
-            public void onPageFinished(WebView view, String url) {
-                if (isAllowedMapUri(Uri.parse(url))) {
-                    showMapReadyState();
-                }
-            }
-
-            @Override
-            @SuppressWarnings("deprecation")
-            public void onReceivedError(
-                    WebView view,
-                    int errorCode,
-                    String description,
-                    String failingUrl
-            ) {
-                if (failingUrl != null
-                        && failingUrl.startsWith(
-                        "https://www.openstreetmap.org/export/embed.html"
-                )) {
-                    showMapLoadError();
-                }
-            }
-        });
+        fallbackMap.setWebViewClient(createMapWebViewClient());
 
         container.addView(fallbackMap);
         fallbackMap.loadUrl(
@@ -218,14 +234,80 @@ public final class ActivityLocalizacion extends AppCompatActivity
         );
     }
 
+    private WebViewClient createMapWebViewClient() {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP
+                ? new ModernMapWebViewClient()
+                : new LegacyMapWebViewClient();
+    }
+
+    private class LegacyMapWebViewClient extends WebViewClient {
+        @Override
+        @SuppressWarnings("deprecation")
+        public boolean shouldOverrideUrlLoading(WebView view, String url) {
+            return !isAllowedMapUri(Uri.parse(url));
+        }
+
+        @Override
+        public void onPageFinished(WebView view, String url) {
+            if (canUpdateViews() && isAllowedMapUri(Uri.parse(url))) showMapReadyState();
+        }
+
+        @Override
+        @SuppressWarnings("deprecation")
+        public void onReceivedError(
+                WebView view,
+                int errorCode,
+                String description,
+                String failingUrl
+        ) {
+            if (failingUrl != null && isAllowedMapUri(Uri.parse(failingUrl))
+                    && canUpdateViews()) {
+                showMapLoadError();
+            }
+        }
+    }
+
+    @TargetApi(Build.VERSION_CODES.LOLLIPOP)
+    private final class ModernMapWebViewClient extends LegacyMapWebViewClient {
+        @Override
+        public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+            return !isAllowedMapUri(request.getUrl());
+        }
+
+        @Override
+        public void onReceivedError(
+                WebView view,
+                WebResourceRequest request,
+                WebResourceError error
+        ) {
+            if (request.isForMainFrame() && canUpdateViews()) showMapLoadError();
+        }
+
+        @Override
+        public void onReceivedHttpError(
+                WebView view,
+                WebResourceRequest request,
+                WebResourceResponse errorResponse
+        ) {
+            if (request.isForMainFrame() && canUpdateViews()
+                    && errorResponse.getStatusCode() >= 400) {
+                showMapLoadError();
+            }
+        }
+    }
+
     private boolean isAllowedMapUri(Uri uri) {
         return uri != null
                 && "https".equalsIgnoreCase(uri.getScheme())
-                && "www.openstreetmap.org".equalsIgnoreCase(uri.getHost());
+                && "www.openstreetmap.org".equalsIgnoreCase(uri.getHost())
+                && (uri.getPort() == -1 || uri.getPort() == 443)
+                && "/export/embed.html".equals(uri.getPath())
+                && uri.getUserInfo() == null;
     }
 
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
+        if (!canUpdateViews()) return;
         LatLng dumbria = new LatLng(DUMBRIA_LATITUDE, DUMBRIA_LONGITUDE);
         googleMap.clear();
         googleMap.addMarker(
@@ -241,6 +323,7 @@ public final class ActivityLocalizacion extends AppCompatActivity
     }
 
     private void showMapReadyState() {
+        uiState = UI_READY;
         connectionPanel.setVisibility(View.GONE);
         connectionProgress.setVisibility(View.GONE);
         connectionStatus.setVisibility(View.GONE);
@@ -249,6 +332,7 @@ public final class ActivityLocalizacion extends AppCompatActivity
     }
 
     private void showMapLoadError() {
+        uiState = UI_ERROR;
         connectionPanel.setVisibility(View.VISIBLE);
         connectionProgress.setVisibility(View.GONE);
         connectionStatus.setVisibility(View.VISIBLE);
@@ -258,6 +342,7 @@ public final class ActivityLocalizacion extends AppCompatActivity
     }
 
     private void showCheckingInternetState() {
+        uiState = UI_CHECKING;
         connectionPanel.setVisibility(View.VISIBLE);
         connectionProgress.setVisibility(View.VISIBLE);
         connectionStatus.setVisibility(View.VISIBLE);
@@ -267,6 +352,7 @@ public final class ActivityLocalizacion extends AppCompatActivity
     }
 
     private void showLoadingMapState() {
+        uiState = UI_LOADING;
         connectionPanel.setVisibility(View.VISIBLE);
         connectionProgress.setVisibility(View.VISIBLE);
         connectionStatus.setVisibility(View.VISIBLE);
@@ -276,6 +362,7 @@ public final class ActivityLocalizacion extends AppCompatActivity
     }
 
     private void showNoInternetState() {
+        uiState = UI_NO_INTERNET;
         connectionPanel.setVisibility(View.VISIBLE);
         connectionProgress.setVisibility(View.GONE);
         connectionStatus.setVisibility(View.VISIBLE);
@@ -324,6 +411,7 @@ public final class ActivityLocalizacion extends AppCompatActivity
     }
 
     private void cancelInternetCheck() {
+        requestGeneration += 1;
         if (internetAccessRequest != null) {
             internetAccessRequest.cancel();
             internetAccessRequest = null;
@@ -333,7 +421,27 @@ public final class ActivityLocalizacion extends AppCompatActivity
     @Override
     protected void onSaveInstanceState(@NonNull Bundle outState) {
         outState.putBoolean(STATE_INTERNET_VERIFIED, internetVerified);
+        outState.putInt(STATE_UI, uiState);
+        outState.putInt(STATE_PROVIDER, mapProvider);
         super.onSaveInstanceState(outState);
+    }
+
+    private boolean canUpdateViews() {
+        return !isFinishing()
+                && (Build.VERSION.SDK_INT < Build.VERSION_CODES.JELLY_BEAN_MR1 || !isDestroyed())
+                && getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (fallbackMap != null) fallbackMap.onResume();
+    }
+
+    @Override
+    protected void onPause() {
+        if (fallbackMap != null) fallbackMap.onPause();
+        super.onPause();
     }
 
     @Override
@@ -347,6 +455,8 @@ public final class ActivityLocalizacion extends AppCompatActivity
         if (fallbackMap != null) {
             fallbackMap.stopLoading();
             fallbackMap.setWebViewClient(null);
+            ViewGroup parent = (ViewGroup) fallbackMap.getParent();
+            if (parent != null) parent.removeView(fallbackMap);
             fallbackMap.destroy();
             fallbackMap = null;
         }

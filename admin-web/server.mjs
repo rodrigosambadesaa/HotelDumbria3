@@ -5,6 +5,11 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(fileURLToPath(new URL("./dist/", import.meta.url)));
 const port = Number(process.env.PORT || 3000);
+const configuredApiOrigin = process.env.ADMIN_API_ORIGIN || "http://localhost:8080";
+const apiUrl = new URL(configuredApiOrigin);
+if (!["http:", "https:"].includes(apiUrl.protocol) || apiUrl.origin !== configuredApiOrigin) {
+  throw new Error("ADMIN_API_ORIGIN must be an exact HTTP(S) origin");
+}
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -17,8 +22,18 @@ const contentTypes = {
 };
 
 const server = createServer(async (request, response) => {
-  const pathname = new URL(request.url || "/", "http://localhost").pathname;
-  let relative = decodeURIComponent(pathname).replace(/^\/+/, "");
+  if (!["GET", "HEAD"].includes(request.method || "")) {
+    response.writeHead(405, { allow: "GET, HEAD" }).end();
+    return;
+  }
+  let relative;
+  try {
+    const pathname = new URL(request.url || "/", "http://localhost").pathname;
+    relative = decodeURIComponent(pathname).replace(/^\/+/, "");
+  } catch {
+    response.writeHead(400).end("Bad request");
+    return;
+  }
   if (!relative || !extname(relative)) relative = "index.html";
   const target = resolve(root, relative);
   if (target !== root && !target.startsWith(`${root}${sep}`)) {
@@ -31,7 +46,7 @@ const server = createServer(async (request, response) => {
     response.writeHead(200, {
       "content-type": contentTypes[extname(target)] || "application/octet-stream",
       "cache-control": target.endsWith("index.html") ? "no-store" : "public, max-age=31536000, immutable",
-      "content-security-policy": "default-src 'self'; connect-src 'self' http://localhost:8080 https:; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+      "content-security-policy": `default-src 'self'; connect-src 'self' ${apiUrl.origin}; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`,
       "cross-origin-opener-policy": "same-origin",
       "cross-origin-resource-policy": "same-origin",
       "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=()",
@@ -39,7 +54,7 @@ const server = createServer(async (request, response) => {
       "x-content-type-options": "nosniff",
       "x-frame-options": "DENY"
     });
-    response.end(body);
+    response.end(request.method === "HEAD" ? undefined : body);
   } catch {
     response.writeHead(404, { "content-type": "text/plain; charset=utf-8" }).end("Not found");
   }

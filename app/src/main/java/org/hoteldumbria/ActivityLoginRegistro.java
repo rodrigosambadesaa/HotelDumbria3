@@ -91,7 +91,7 @@ public class ActivityLoginRegistro extends AppCompatActivity {
         if (email_recuperado.length() > 0 && refreshToken != null) {
             getChk_guardar_login().setChecked(true);
             getPg().setVisibility(View.VISIBLE);
-            refrescarSesion(refreshToken);
+            refrescarSesion();
         }
 
 
@@ -199,10 +199,14 @@ public class ActivityLoginRegistro extends AppCompatActivity {
                     try {
                         String accessToken = response.getString("accessToken");
                         String refreshToken = response.getString("refreshToken");
-                        SessionManager.setAccessToken(accessToken);
+                        SessionManager.startSession(
+                                this,
+                                accessToken,
+                                refreshToken,
+                                recordar
+                        );
                         if (recordar) {
                             getPreferencias().edit().putString("email", email).apply();
-                            SessionManager.saveRefreshToken(this, refreshToken);
                         } else {
                             getPreferencias().edit().clear().apply();
                         }
@@ -226,44 +230,29 @@ public class ActivityLoginRegistro extends AppCompatActivity {
         getPeticionesRed().anhadirPeticionACola(request);
     }
 
-    private void refrescarSesion(String refreshToken) {
+    private void refrescarSesion() {
         internetAccessRequest = Utilidades.comprobarAccesoAInternet(this, (reachable, host) -> {
             if (!reachable) {
                 getPg().setVisibility(View.INVISIBLE);
                 Toast.makeText(this, "Sin acceso real a Internet", Toast.LENGTH_LONG).show();
                 return;
             }
-            JSONObject payload = new JSONObject();
-            try {
-                payload.put("refreshToken", refreshToken);
-            } catch (Exception ignored) {
-                return;
-            }
-            JsonObjectRequest request = new JsonObjectRequest(
-                    Request.Method.POST, WebService.getRefreshUrl(), payload,
-                    response -> {
-                        try {
-                            SessionManager.setAccessToken(response.getString("accessToken"));
-                            SessionManager.saveRefreshToken(this, response.getString("refreshToken"));
-                            cargarPerfilYAbrir();
-                        } catch (Exception error) {
-                            getPg().setVisibility(View.INVISIBLE);
-                            SessionManager.clear(this);
-                        }
-                    },
-                    error -> {
-                        getPg().setVisibility(View.INVISIBLE);
-                        SessionManager.clear(this);
-                        getPreferencias().edit().remove("email").apply();
-                    });
-            request.setTag(getColaPeticionesLogin());
-            getPeticionesRed().anhadirPeticionACola(request);
+            SessionManager.refreshAccessToken(this, refreshed -> {
+                if (!getLifecycle().getCurrentState().isAtLeast(
+                        androidx.lifecycle.Lifecycle.State.STARTED)) return;
+                if (refreshed) {
+                    cargarPerfilYAbrir();
+                } else {
+                    getPg().setVisibility(View.INVISIBLE);
+                    getPreferencias().edit().remove("email").apply();
+                }
+            });
         });
     }
 
     private void cargarPerfilYAbrir() {
         AuthenticatedJsonRequest request = new AuthenticatedJsonRequest(
-                Request.Method.GET, WebService.getMeUrl(), null,
+                this, Request.Method.GET, WebService.getMeUrl(), null,
                 response -> {
                     getPg().setVisibility(View.INVISIBLE);
                     Usuario usuario = ApiMapper.userFromProfile(response);

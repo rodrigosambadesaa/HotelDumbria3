@@ -18,7 +18,6 @@ import android.view.View;
 import android.view.Window;
 import android.view.inputmethod.InputMethodManager;
 
-import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
@@ -168,9 +167,11 @@ public class Utilidades {
         return calendar;
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.O)
     public static ZonedDateTime aZonedDateTime(Calendar fecha_entrada) {
-        return ZonedDateTime.ofInstant(fecha_entrada.toInstant(), ZoneId.systemDefault());
+        return ZonedDateTime.ofInstant(
+                java.time.Instant.ofEpochMilli(fecha_entrada.getTimeInMillis()),
+                ZoneId.systemDefault()
+        );
     }
 
     //______________________________________________________________________________

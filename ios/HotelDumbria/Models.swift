@@ -113,6 +113,10 @@ struct ReservationRequest: Encodable {
     let guests: Int
 }
 
+struct BulkReservationRequest: Encodable {
+    let reservations: [ReservationRequest]
+}
+
 struct RegistrationDraft {
     var nif = ""
     var email = ""

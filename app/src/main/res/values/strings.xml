@@ -19,6 +19,7 @@
     <string name="email">Correo electrónico</string>
     <string name="password">Contraseña</string>
     <string name="remember_password">Recordar sesión</string>
+    <string name="cancel_reservation">Cancelar reserva</string>
     <string name="sign_in">Iniciar sesión</string>
     <string name="create_account">Crear una cuenta</string>
     <string name="book_rooms">Reserva tu habitación</string>

@@ -34,11 +34,17 @@ export function hashToken(token) {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
-export async function signAccessToken(user, config) {
+export async function signAccessToken(user, config, session) {
   const now = Math.floor(Date.now() / 1000);
-  return new SignJWT({ role: user.role, email: user.email })
+  return new SignJWT({
+    role: user.role,
+    sid: session.id,
+    cv: user.credential_version,
+    client: session.clientType
+  })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
     .setSubject(user.id)
+    .setJti(crypto.randomUUID())
     .setIssuer("hotel-dumbria-api")
     .setAudience("hotel-dumbria-clients")
     .setIssuedAt(now)

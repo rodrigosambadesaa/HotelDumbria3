@@ -34,6 +34,11 @@ Empieza por [EJECUCION.md](EJECUCION.md). El modelo de amenazas y controles se
 documenta en [SECURITY.md](SECURITY.md), y la migración histórica en
 [legacy/MIGRACION.md](legacy/MIGRACION.md).
 
+Detalles adicionales: [backend](backend/README.md),
+[Android](docs/ANDROID.md), [arquitectura](docs/ARCHITECTURE.md) y
+[cambios de contrato API](docs/API_CHANGES.md). La evidencia y las decisiones de
+la revisión completa están en [el informe de auditoría](docs/AUDIT_REPORT.md).
+
 ## Estructura
 
 | Ruta | Contenido |

@@ -19,6 +19,14 @@ export function createDatabase(connectionString) {
     query(text, values = []) {
       return pool.query(text, values);
     },
+    async withClient(operation) {
+      const client = await pool.connect();
+      try {
+        return await operation(client);
+      } finally {
+        client.release();
+      }
+    },
     async transaction(operation) {
       const client = await pool.connect();
       try {

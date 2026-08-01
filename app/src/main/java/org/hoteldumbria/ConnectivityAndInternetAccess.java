@@ -177,6 +177,10 @@ public final class ConnectivityAndInternetAccess {
     private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
     private static final SSLSocketFactory TLS_12_SOCKET_FACTORY = createTls12Factory();
 
+    static SSLSocketFactory legacyTls12SocketFactory() {
+        return TLS_12_SOCKET_FACTORY;
+    }
+
     /** Preserves the original constructor that changes the configured hosts. */
     public ConnectivityAndInternetAccess(ArrayList<String> hosts) {
         configuredHosts = normalizeHosts(hosts);

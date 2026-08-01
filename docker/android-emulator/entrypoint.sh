@@ -7,6 +7,11 @@ IMAGE_PACKAGE="system-images;android-${ANDROID_API};${SYSTEM_IMAGE_TAG};${SYSTEM
 DISPLAY_WIDTH="${DISPLAY_WIDTH:-1280}"
 DISPLAY_HEIGHT="${DISPLAY_HEIGHT:-800}"
 
+if [[ ! "${AVD_NAME}" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+  echo "Invalid AVD_NAME" >&2
+  exit 2
+fi
+
 if [[ ! -f "/root/.android/avd/${AVD_NAME}.ini" ]]; then
   mkdir -p /root/.android/avd
   echo "no" | avdmanager create avd \
@@ -21,6 +26,12 @@ fi
 # requiring the on-screen keyboard. Apply it on every start as existing AVDs
 # are persisted in a Docker volume.
 AVD_CONFIG="/root/.android/avd/${AVD_NAME}.avd/config.ini"
+# A Windows/WSL or container crash can leave AVD lock directories in the
+# persisted volume. No emulator process survives inside a newly started
+# container, so only locks belonging to this validated AVD are stale here.
+rm -f -- "/root/.android/avd/${AVD_NAME}.ini.lock"
+find "/root/.android/avd/${AVD_NAME}.avd" -mindepth 1 -maxdepth 1 \
+  -name '*.lock' -exec rm -rf -- {} +
 sed -i '/^hw\.keyboard[[:space:]]*=/d' "${AVD_CONFIG}"
 printf '\nhw.keyboard = yes\n' >> "${AVD_CONFIG}"
 
@@ -39,6 +50,8 @@ websockify --web=/usr/share/novnc/ 6080 localhost:5900 &
 exec emulator "@${AVD_NAME}" \
   -no-audio \
   -no-boot-anim \
+  -no-metrics \
+  -no-snapshot \
   -gpu swiftshader_indirect \
   -accel on \
   -memory "${EMULATOR_MEMORY}" \

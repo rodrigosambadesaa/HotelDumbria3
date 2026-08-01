@@ -37,6 +37,7 @@ import java.util.HashMap;
 
 public class UploadImagenActivity extends AppCompatActivity {
     private boolean internetVerified;
+    private boolean stopped;
     private ConnectivityAndInternetAccess.Request internetAccessRequest;
 
     private JsonObjectRequest jsObjRequest;
@@ -269,7 +270,7 @@ public class UploadImagenActivity extends AppCompatActivity {
         getBtn_UploadImagen().setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                uploadImagen(MainActivity.getUsuarioRecibido().getNif(), getBitmapImagenSeleccionada(), getNombreFicheroSeleccionado());
+                uploadImagen(getBitmapImagenSeleccionada(), getNombreFicheroSeleccionado());
             }
         });
 
@@ -315,8 +316,10 @@ public class UploadImagenActivity extends AppCompatActivity {
                 return;
             }
             try {
+                int persistableFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION;
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT
-                        && (data.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION) != 0) {
+                        && (data.getFlags() & persistableFlags) == persistableFlags) {
                     getContentResolver().takePersistableUriPermission(
                             imagenUri,
                             Intent.FLAG_GRANT_READ_URI_PERMISSION
@@ -423,14 +426,7 @@ public class UploadImagenActivity extends AppCompatActivity {
 
 
 
-    void uploadImagen(String identificadorUsuario, Bitmap bitmap, String nombreFichero) {
-
-        Intent it_recibido = getIntent();
-        if (identificadorUsuario == null) {
-            Toast.makeText(getApplicationContext(),"Identificador de usuario no recibido", Toast.LENGTH_LONG).show();
-            return;
-        }
-
+    void uploadImagen(Bitmap bitmap, String nombreFichero) {
         if (bitmap==null || nombreFichero==null){
             Toast.makeText(getApplicationContext(),"Imagen no recibida", Toast.LENGTH_LONG).show();
             return;
@@ -443,7 +439,7 @@ public class UploadImagenActivity extends AppCompatActivity {
             internetAccessRequest = Utilidades.comprobarAccesoAInternet(this, (reachable, reachedHost) -> {
                 if (reachable) {
                     internetVerified = true;
-                    uploadImagen(identificadorUsuario, bitmap, nombreOriginal);
+                    uploadImagen(bitmap, nombreOriginal);
                 } else {
                     getPd().dismiss();
                     Toast.makeText(this, "Sin acceso real a Internet", Toast.LENGTH_LONG).show();
@@ -453,17 +449,19 @@ public class UploadImagenActivity extends AppCompatActivity {
         }
         internetVerified = false;
 
-        HashMap<String,String> parametros = new HashMap<>();
-
         // Cambiamos la extension a PNG
         int i = nombreFichero.lastIndexOf('.');
         if (i>0) nombreFichero= nombreFichero.substring(0,i) + ".png";
         else nombreFichero = nombreFichero + ".png";
 
+        enviarImagen(nombreFichero, bitmap, true);
+    }
+
+    private void enviarImagen(String nombreFichero, Bitmap bitmap, boolean mayRefresh) {
         VolleyMultipartRequest peticionUploadFichero = new VolleyMultipartRequest(
                 Request.Method.POST,
                 WebService.getAvatarUrl(),
-                parametros,
+                new HashMap<>(),
                 nombreFichero,
                 Utilidades.getBytesPNGDeBitmap(bitmap, getCALIDAD_IMAGEN()),
                 8000,
@@ -477,6 +475,18 @@ public class UploadImagenActivity extends AppCompatActivity {
                     finish();
                 },
                 error -> {
+                    if (mayRefresh && error.networkResponse != null
+                            && error.networkResponse.statusCode == 401) {
+                        SessionManager.refreshAccessToken(this, refreshed -> {
+                            if (refreshed && !stopped && !isFinishing()) {
+                                enviarImagen(nombreFichero, bitmap, false);
+                            } else {
+                                getPd().dismiss();
+                                Toast.makeText(this, "La sesión ha caducado", Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                        return;
+                    }
                     getPd().dismiss();
                     Log.e("UploadAvatar", "Subida rechazada", error);
                     Toast.makeText(this, "No se pudo subir la imagen", Toast.LENGTH_SHORT).show();
@@ -487,7 +497,14 @@ public class UploadImagenActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onStart() {
+        super.onStart();
+        stopped = false;
+    }
+
+    @Override
     protected void onStop() {
+        stopped = true;
         super.onStop();
         if (internetAccessRequest != null) {
             internetAccessRequest.cancel();

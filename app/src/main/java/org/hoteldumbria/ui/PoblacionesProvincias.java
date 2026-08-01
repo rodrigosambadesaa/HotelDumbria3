@@ -6,12 +6,12 @@ public class PoblacionesProvincias implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    private int poblacionid;
+    private String poblacionid;
     private String poblacion;
     private int provinciaid;
     private String provincia;
 
-    public int getPoblacionid() {
+    public String getPoblacionid() {
         return poblacionid;
     }
 
@@ -27,7 +27,7 @@ public class PoblacionesProvincias implements Serializable {
         return provincia;
     }
 
-    public PoblacionesProvincias(int poblacionid, String poblacion, int provinciaid, String provincia) {
+    public PoblacionesProvincias(String poblacionid, String poblacion, int provinciaid, String provincia) {
         super();
         this.setPoblacionid(poblacionid);
         this.setPoblacion(poblacion);
@@ -35,7 +35,7 @@ public class PoblacionesProvincias implements Serializable {
         this.setProvincia(provincia);
     }
 
-    public void setPoblacionid(int poblacionid) {
+    public void setPoblacionid(String poblacionid) {
         this.poblacionid = poblacionid;
     }
 

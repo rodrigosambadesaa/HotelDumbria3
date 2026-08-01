@@ -1,5 +1,8 @@
 apply plugin: 'com.android.application'
 
+def debugApiBaseUrl = project.findProperty('HOTEL_API_BASE_URL') ?: 'http://10.0.2.2:8080/api/v1'
+def releaseApiBaseUrl = project.findProperty('HOTEL_RELEASE_API_BASE_URL') ?: 'https://configure-before-release.invalid/api/v1'
+
 android {
     namespace "org.hoteldumbria"
     compileSdkVersion 36
@@ -15,23 +18,50 @@ android {
         versionCode 2
         versionName "2.0"
         multiDexEnabled true
-        buildConfigField "String", "API_BASE_URL",
-                "\"${project.findProperty('HOTEL_API_BASE_URL') ?: 'http://10.0.2.2:8080/api/v1'}\""
+        multiDexKeepProguard file('multidex-config.pro')
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
     buildTypes {
+        debug {
+            buildConfigField "String", "API_BASE_URL", "\"${debugApiBaseUrl}\""
+        }
         release {
-            minifyEnabled false
+            buildConfigField "String", "API_BASE_URL", "\"${releaseApiBaseUrl}\""
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
     compileOptions {
+        coreLibraryDesugaringEnabled true
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
 }
 
+tasks.register('verifyReleaseApiUrl') {
+    doLast {
+        URI endpoint
+        try {
+            endpoint = new URI(releaseApiBaseUrl.toString())
+        } catch (Exception error) {
+            throw new GradleException('HOTEL_RELEASE_API_BASE_URL no es una URL válida', error)
+        }
+        String host = endpoint.host == null ? '' : endpoint.host.toLowerCase(Locale.ROOT)
+        if (endpoint.scheme != 'https' || !host
+                || host == 'localhost' || host == '127.0.0.1' || host == '10.0.2.2'
+                || host.endsWith('.invalid')) {
+            throw new GradleException('La variante release exige HOTEL_RELEASE_API_BASE_URL con HTTPS')
+        }
+    }
+}
+
+afterEvaluate {
+    tasks.named('preReleaseBuild').configure { dependsOn tasks.named('verifyReleaseApiUrl') }
+}
+
 dependencies {
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.3'
     implementation fileTree(dir: 'libs', include: ['*.jar'])
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'androidx.multidex:multidex:2.0.1'
@@ -47,7 +77,10 @@ dependencies {
     // 1.2.x/3.6.x require API 19. Keep the instrumentation suite runnable
     // on the application's real minimum, Android 4.1 (API 16).
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test:core:1.5.0'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+    // AndroidJUnitRunner invokes Trace before MultiDex.install() on old Dalvik.
+    implementation 'androidx.tracing:tracing:1.0.0'
     implementation 'com.android.volley:volley:1.2.1'
     implementation 'com.google.code.gson:gson:2.11.0'
     implementation 'com.fasterxml.jackson.core:jackson-core:2.17.3'

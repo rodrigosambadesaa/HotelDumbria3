@@ -18,7 +18,8 @@ public class ModelPrimitiveTypesTest {
         assertPrimitiveField(Persona.class, "latitude", double.class);
         assertPrimitiveField(Persona.class, "longitude", double.class);
 
-        assertPrimitiveField(PoblacionesProvincias.class, "poblacionid", int.class);
+        assertEquals(String.class,
+                PoblacionesProvincias.class.getDeclaredField("poblacionid").getType());
         assertPrimitiveField(PoblacionesProvincias.class, "provinciaid", int.class);
 
         assertPrimitiveField(Habitacion.class, "numero", int.class);

@@ -69,6 +69,16 @@ wsl -d Ubuntu -- bash -lc "cd '/mnt/c/Users/rodri/OneDrive/Documentos/GitHub/Hot
 Esto ejecuta pruebas unitarias y genera
 `app/build/outputs/apk/debug/app-debug.apk`.
 
+La comprobación completa (debug, unitarios, lint y release con R8) es:
+
+```powershell
+wsl -d Ubuntu -- bash -lc "cd '/mnt/c/Users/rodri/OneDrive/Documentos/GitHub/HotelDumbria3' && /usr/bin/docker compose run --rm android-build ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug assembleRelease -PHOTEL_API_BASE_URL=http://10.0.2.2:8080/api/v1 -PHOTEL_RELEASE_API_BASE_URL=https://api.hotel.example/api/v1"
+```
+
+La URL de release del ejemplo solo demuestra la compilación. Sustitúyela por
+el endpoint HTTPS real antes de distribuir. `verifyReleaseApiUrl` rechaza HTTP,
+localhost, `10.0.2.2` y dominios `.invalid` si se intenta una release publicable.
+
 ## 4. Emuladores: siempre uno solo
 
 Los scripts rechazan el arranque si detectan otro emulador del proyecto. No
@@ -121,6 +131,18 @@ Después:
 por esta modernización; no es técnicamente viable ejecutar la aplicación
 AndroidX actual en Android 1.0. API 36 representa Android 16; no existe una
 imagen estable de Android 17 en la configuración actual.
+
+Para ejecutar instrumentación en el emulador activo, genera los dos APK y
+cópialos al mismo contenedor; no arranques otro AVD:
+
+```powershell
+wsl -d Ubuntu -- bash -lc "cd '/mnt/c/Users/rodri/OneDrive/Documentos/GitHub/HotelDumbria3' && /usr/bin/docker compose run --rm android-build ./gradlew --no-daemon assembleDebug assembleDebugAndroidTest"
+# Cambia 29 por el único perfil que esté activo: 16, 29 o 36.
+wsl -d Ubuntu -- bash -lc "cd '/mnt/c/Users/rodri/OneDrive/Documentos/GitHub/HotelDumbria3' && /usr/bin/docker compose cp app/build/outputs/apk/debug/app-debug.apk emulator-api29:/tmp/app.apk && /usr/bin/docker compose cp app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk emulator-api29:/tmp/tests.apk && /usr/bin/docker compose exec -T emulator-api29 adb install -r /tmp/app.apk && /usr/bin/docker compose exec -T emulator-api29 adb install -r /tmp/tests.apk && /usr/bin/docker compose exec -T emulator-api29 adb shell am instrument -w org.hoteldumbria.test/androidx.test.runner.AndroidJUnitRunner"
+```
+
+La prueba de conectividad requiere salida real a Internet; si la red corporativa
+bloquea UDP/53, debe pasar mediante la fase HTTPS de respaldo.
 
 ## 5. Migrar una copia del SQL histórico
 

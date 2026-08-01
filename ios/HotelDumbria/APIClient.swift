@@ -13,6 +13,8 @@ actor APIClient {
     }()
     private var accessToken: String?
     private var refreshToken: String?
+    private var refreshTask: Task<SessionResponse, Error>?
+    private var sessionGeneration = 0
 
     func login(email: String, password: String) async throws -> User {
         try await InternetReachability.shared.requireInternet()
@@ -22,6 +24,7 @@ actor APIClient {
         )
         accessToken = response.accessToken
         refreshToken = response.refreshToken
+        sessionGeneration += 1
         return try await profile()
     }
 
@@ -36,6 +39,7 @@ actor APIClient {
         )
         accessToken = response.accessToken
         self.refreshToken = response.refreshToken
+        sessionGeneration += 1
         return try await profile()
     }
 
@@ -74,20 +78,20 @@ actor APIClient {
 
     func reserve(rooms: Set<Room>, user: User, checkIn: Date, checkOut: Date) async throws {
         try await InternetReachability.shared.requireInternet()
-        for room in rooms {
-            let payload = ReservationRequest(
+        let reservations = rooms.map { room in
+            ReservationRequest(
                 roomId: room.numero,
                 checkIn: checkIn.apiDate,
                 checkOut: checkOut.apiDate,
                 guests: 1
             )
-            let _: ReservationResponse = try await jsonRequest(
-                url: AppConfiguration.reservations,
-                method: "POST",
-                body: payload,
-                authenticated: true
-            )
         }
+        let _: ListResponse<ReservationResponse> = try await jsonRequest(
+            url: AppConfiguration.bulkReservations,
+            method: "POST",
+            body: BulkReservationRequest(reservations: reservations),
+            authenticated: true
+        )
     }
 
     func uploadProfileImage(_ imageData: Data, user: User) async throws {
@@ -104,6 +108,7 @@ actor APIClient {
     }
 
     func signOut() async {
+        sessionGeneration += 1
         if let refreshToken {
             do {
                 let _: MessageResponse = try await jsonRequest(
@@ -130,6 +135,7 @@ actor APIClient {
         )
         accessToken = nil
         refreshToken = nil
+        sessionGeneration += 1
     }
 
     private func profile() async throws -> User {
@@ -150,7 +156,7 @@ actor APIClient {
     }
 
     private func request<Output: Decodable>(
-        _ input: URLRequest, authenticated: Bool
+        _ input: URLRequest, authenticated: Bool, mayRefresh: Bool = true
     ) async throws -> Output {
         var request = input
         if authenticated {
@@ -159,6 +165,10 @@ actor APIClient {
         }
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw AppError.invalidResponse }
+        if http.statusCode == 401, authenticated, mayRefresh {
+            try await refreshAccessToken()
+            return try await self.request(input, authenticated: true, mayRefresh: false)
+        }
         guard (200..<300).contains(http.statusCode) else {
             let apiError = try? JSONDecoder().decode(APIErrorResponse.self, from: data)
             throw AppError.server(apiError?.message ?? "No se pudo completar la operación.")
@@ -167,6 +177,49 @@ actor APIClient {
             return MessageResponse(message: "OK") as! Output
         }
         return try JSONDecoder().decode(Output.self, from: data)
+    }
+
+    private func refreshAccessToken() async throws {
+        let generation = sessionGeneration
+        if let refreshTask {
+            let response = try await refreshTask.value
+            guard sessionGeneration == generation else {
+                throw AppError.server("La sesión ha caducado.")
+            }
+            accessToken = response.accessToken
+            refreshToken = response.refreshToken
+            return
+        }
+        guard let currentRefreshToken = refreshToken else {
+            throw AppError.server("La sesión ha caducado.")
+        }
+        let session = self.session
+        let task = Task<SessionResponse, Error> {
+            var request = URLRequest(url: AppConfiguration.refresh)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONEncoder().encode(["refreshToken": currentRefreshToken])
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse,
+                  (200..<300).contains(http.statusCode) else {
+                throw AppError.server("La sesión ha caducado.")
+            }
+            return try JSONDecoder().decode(SessionResponse.self, from: data)
+        }
+        refreshTask = task
+        defer { refreshTask = nil }
+        do {
+            let response = try await task.value
+            guard sessionGeneration == generation else {
+                throw AppError.server("La sesión ha caducado.")
+            }
+            accessToken = response.accessToken
+            refreshToken = response.refreshToken
+        } catch {
+            accessToken = nil
+            refreshToken = nil
+            throw error
+        }
     }
 }
 

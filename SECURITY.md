@@ -1,60 +1,101 @@
 # Seguridad
 
-## Contraseñas y sesiones
+Este documento describe controles técnicos, no asesoramiento jurídico. El
+despliegue debe completar análisis de impacto, retención y obligaciones locales.
 
-- Argon2id con 19 MiB, 2 iteraciones y paralelismo 1; cada hash contiene una sal
-  aleatoria. El servidor vuelve a derivar automáticamente hashes cuyos
-  parámetros queden obsoletos.
-- Mínimo 12 y máximo 128 caracteres; rate limit, bloqueo temporal y respuesta
-  uniforme reducen fuerza bruta y enumeración.
-- Access tokens de 15 minutos; refresh tokens aleatorios, rotatorios, revocables
-  y almacenados como SHA-256 porque son secretos de alta entropía.
-- Android guarda únicamente el refresh token cifrado con Android Keystore desde
-  API 18; en API 16/17 no persiste sesión. iOS usa Keychain. La web mantiene el
-  access token solo en memoria y usa cookie `HttpOnly`, `SameSite=Strict`.
-- La contraseña nunca se registra, serializa en el perfil ni se guarda en las
-  preferencias del cliente.
+## Identidad, contraseñas y bloqueo
 
-## OWASP Top 10
+- Las contraseñas nuevas se derivan con Argon2id (`m=19456`, `t=2`, `p=1`) y
+  sal aleatoria; se recalculan al iniciar sesión si cambian los parámetros.
+- El mínimo es 12 y el máximo 128 caracteres. Registro, login, recuperación,
+  verificación, refresh, avatar y mutaciones administrativas tienen límites por
+  ruta; login, registro y recuperación combinan IP real y HMAC del email.
+- Cinco fallos dentro de 15 minutos fijan un bloqueo suave de 15 minutos. Los
+  fallos durante el bloqueo no cambian `locked_until`; una contraseña correcta
+  sí puede entrar y limpia el bloqueo, evitando que conocer un email permita
+  denegar el acceso. Al vencer comienza una ventana nueva; recuperar la
+  contraseña sigue disponible y restablece el contador.
+- Login, registro y recuperación usan respuestas neutras para no distinguir una
+  cuenta ausente, deshabilitada, no verificada o temporalmente bloqueada.
+- DNI/NIE se normaliza y valida con letra de control. El género es opcional y se
+  elimina al anonimizar.
 
-| Riesgo | Controles implementados |
-|---|---|
-| Acceso roto | autorización por rol y propiedad del recurso; rutas admin separadas |
-| Fallos criptográficos | Argon2id, tokens CSPRNG, Keystore/Keychain, TLS obligatorio en producción |
-| Inyección | validación Zod y SQL exclusivamente parametrizado |
-| Diseño inseguro | reservas transaccionales y exclusión PostgreSQL contra solapamientos |
-| Mala configuración | secretos fuera de Git, CORS de lista cerrada, CSP, HSTS y contenedores no root |
-| Componentes vulnerables | lockfiles, imágenes versionadas y comandos de auditoría reproducibles |
-| Autenticación rota | verificación de email, rate limit, bloqueo, rotación y revocación |
-| Integridad de software | checksum del SDK Android, lockfiles y builds inmutables |
-| Registro insuficiente | auditoría de login, perfil, avatar, reservas y acciones administrativas |
-| SSRF | no existen URLs arbitrarias proporcionadas por usuarios en llamadas del servidor |
+## Sesiones web y móvil
 
-## Controles adicionales
+Los access tokens duran 15 minutos e incluyen `jti`, identificador de sesión,
+tipo de cliente y versión de credenciales. Cada petición comprueba que la sesión
+sigue activa, por lo que una revocación invalida también el access token.
 
-- Upload limitado, nombre de almacenamiento aleatorio, detección por contenido
-  real y solo JPEG/PNG/WebP; el fichero nunca se ejecuta.
-- Borrado de cuenta autenticado con contraseña y transaccional. `persons` es la
-  raíz; sus claves foráneas `ON DELETE CASCADE` eliminan usuario, reservas,
-  sesiones, tokens y avatar de base de datos.
-- Errores internos se registran sin devolver consultas, rutas ni credenciales.
-- CSP, `X-Content-Type-Options`, `Referrer-Policy`, permisos restringidos y
-  protección CSRF para cookies.
-- API y panel se ejecutan sin capacidades Linux, sin privilegios adicionales,
-  como usuarios no root y con filesystem de solo lectura.
+- Web: `/auth/web/*`; refresh exclusivamente en cookie `HttpOnly`,
+  `SameSite=Strict` y `Secure` en producción. El access token solo vive en
+  memoria. Refresh y logout exigen origen exacto y coincidencia entre cookie
+  CSRF y `X-CSRF-Token`; nunca se acepta refresh en JSON.
+- Android: `/auth/mobile/*`; refresh en JSON y cifrado mediante Android Keystore
+  desde API 18. API 16/17 lo conservan solo en memoria. Las respuestas 401
+  concurrentes comparten una única rotación y se reintentan una vez.
+- La rotación bloquea la fila con `FOR UPDATE`, crea el sucesor, enlaza
+  `replaced_by` y revoca el anterior en una transacción. Reutilizar un token
+  rotado compromete y revoca toda la familia.
+- Cambio/recuperación de contraseña, reutilización y anonimización revocan todas
+  las sesiones. El hash de User-Agent se conserva como señal de auditoría; no se
+  usa como bloqueo rígido.
 
-## Antes de producción
+## Correo, verificación y recuperación
 
-1. Usa un proxy TLS con certificados válidos y cambia todos los endpoints a
-   `https://`; establece `NODE_ENV=production` y `COOKIE_SECURE=true`.
-2. Cambia credenciales bootstrap, JWT, PostgreSQL y SMTP; almacénalas en un
-   gestor de secretos, no en `.env`.
-3. Limita exposición de PostgreSQL/Mailpit, configura copias cifradas y prueba
-   restauración y borrado de backups conforme a la política de retención.
-4. Activa análisis SAST, dependencias, imágenes y secretos en CI, además de
-   pruebas DAST sobre un entorno efímero.
-5. Define retención del log de auditoría, alertas, respuesta a incidentes,
-   protección anti-DDoS y política de privacidad/RGPD.
+Registro y recuperación insertan el correo en el outbox dentro de la misma
+transacción. Los tokens tienen alta entropía y solo se guarda SHA-256. El GET de
+verificación/recuperación muestra un formulario con CSP estricta; únicamente el
+POST consume el token mediante `SELECT … FOR UPDATE`, actualiza la cuenta y
+confirma la transacción.
 
-Reporta vulnerabilidades de forma privada al responsable del repositorio; no
-incluyas datos reales, tokens ni credenciales en un issue público.
+Varios workers reclaman filas con `FOR UPDATE SKIP LOCKED`, procesan lotes,
+aplican espera exponencial y terminan en `dead`. El payload sensible se vacía al
+enviar o agotar reintentos. La entrega es deliberadamente **al menos una vez**:
+SMTP y PostgreSQL no comparten transacción, de modo que un fallo después de que
+SMTP acepte el mensaje podría repetirlo. Se usa un `Message-ID` estable para que
+proveedores compatibles dedupliquen; no se promete exactamente una vez.
+
+## Privacidad, reservas y avatares
+
+- Eliminar una cuenta anonimiza DNI, email, nombre, género y dirección, elimina
+  avatar y tokens, incrementa la versión de credenciales y deshabilita el
+  usuario. Las reservas mínimas se conservan y su FK es `ON DELETE RESTRICT`.
+- Las reservas se validan en `Europe/Madrid`: no pasado, máximo 30 noches y
+  horizonte de 18 meses. PostgreSQL aplica fechas, valores y exclusión GiST
+  `[)` para impedir solapamientos incluso con solicitudes concurrentes.
+- La cancelación del cliente comprueba propiedad, estado y 48 horas exactas
+  antes de la entrada local de las 15:00. Los cambios administrativos siguen una
+  máquina de estados y registran estado anterior/nuevo, actor y motivo.
+- El avatar se detecta por bytes, decodifica con límite de píxeles, redimensiona,
+  elimina metadatos y reencodifica como WebP. Un bloqueo asesor transaccional
+  serializa subidas; compensación y limpieza periódica retiran huérfanos.
+  Se sirve autenticado, sin `sniffing`, sin traversal y sin caché compartida.
+
+## Perímetro y OWASP
+
+- SQL parametrizado y validación Zod; errores públicos enumerados y 5xx
+  genéricos con UUID de petición.
+- CORS usa orígenes exactos; no hay comodín con credenciales. En producción se
+  exigen HTTPS, cookies Secure y `TRUSTED_PROXIES` explícito. El tráfico directo
+  no confía en `X-Forwarded-For`.
+- JWT y HMAC de auditoría usan secretos distintos. Logs redactan Authorization,
+  cookies, contraseñas y refresh tokens; IP y User-Agent se auditan con HMAC.
+- Helmet aplica CSP, HSTS en producción, `nosniff` y política de referencia. Los
+  contenedores de API/panel son no-root, sin capacidades y con raíz de solo
+  lectura.
+- Backups Android están desactivados. Release bloquea HTTP, valida endpoint
+  HTTPS y usa R8; debug permite HTTP solo a `10.0.2.2`.
+- La WebView de mapa restringe host/ruta, archivos, popups, contenido mixto y
+  cookies, y se destruye con la Activity. No se solicitan permisos de ubicación.
+
+## Secretos y despliegue
+
+No publiques `.env`, dumps, APK, keystores ni claves. Usa un gestor de secretos,
+un proxy TLS que sobrescriba cabeceras reenviadas y configura
+`TRUSTED_PROXIES` con CIDR/IP exactos. Separa redes de API, base de datos y SMTP;
+no expongas PostgreSQL ni Mailpit. Restringe la clave de Google Maps por package
+y huellas debug/release, limita APIs/cuotas y usa claves diferentes por entorno.
+
+Define copias cifradas, retención, restauración probada, alertas de sesiones
+comprometidas/outbox `dead`, SAST/SCA/secret scanning, DAST efímero y respuesta a
+incidentes. Reporta vulnerabilidades de forma privada y sin datos reales.

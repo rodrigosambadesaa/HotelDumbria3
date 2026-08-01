@@ -241,7 +241,7 @@ struct ProfileView: View {
             }
             .overlay { if state.isWorking { ProgressView() } }
             .confirmationDialog(
-                "Se eliminarán la persona, la cuenta, las reservas y el avatar.",
+                "Se anonimizarán tus datos, se eliminará el avatar y se cerrarán las sesiones. Se conservará el historial mínimo de reservas.",
                 isPresented: $confirmingDeletion,
                 titleVisibility: .visible
             ) {

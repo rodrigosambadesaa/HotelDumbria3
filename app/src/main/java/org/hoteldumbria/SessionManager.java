@@ -10,12 +10,19 @@ import android.security.keystore.KeyProperties;
 import android.util.Base64;
 import android.util.Log;
 
+import com.android.volley.Request;
+import com.android.volley.toolbox.JsonObjectRequest;
+
+import org.json.JSONObject;
+
 import java.math.BigInteger;
 import java.security.KeyPairGenerator;
 import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.util.Calendar;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
@@ -33,17 +40,128 @@ public final class SessionManager {
     private static final String PREFS = "hotel_secure_session";
     private static final String ALIAS = "hotel_dumbria_refresh_v2";
     private static volatile String accessToken;
+    private static volatile String refreshToken;
+    private static volatile boolean persistRefreshToken;
+    private static final Object REFRESH_LOCK = new Object();
+    private static final List<RefreshCallback> REFRESH_CALLBACKS = new ArrayList<>();
+    private static boolean refreshInFlight;
+    private static int sessionGeneration;
 
     private SessionManager() {}
 
     public static String getAccessToken() { return accessToken; }
     public static void setAccessToken(String token) { accessToken = token; }
 
+    public static void startSession(
+            Context context,
+            String newAccessToken,
+            String newRefreshToken,
+            boolean remember
+    ) {
+        synchronized (REFRESH_LOCK) {
+            sessionGeneration++;
+            accessToken = newAccessToken;
+            refreshToken = newRefreshToken;
+            persistRefreshToken = remember && Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2;
+            if (persistRefreshToken) {
+                persistRefreshToken(context, newRefreshToken);
+            } else {
+                clearPersistedToken(context);
+            }
+        }
+    }
+
+    public static void updateRotatedTokens(
+            Context context,
+            String newAccessToken,
+            String newRefreshToken
+    ) {
+        accessToken = newAccessToken;
+        refreshToken = newRefreshToken;
+        if (persistRefreshToken) persistRefreshToken(context, newRefreshToken);
+    }
+
+    public static String getRefreshToken(Context context) {
+        return refreshToken != null ? refreshToken : loadRefreshToken(context);
+    }
+
+    public interface RefreshCallback {
+        void onComplete(boolean refreshed);
+    }
+
+    /** Coalesces simultaneous 401 responses into one refresh-token rotation. */
+    public static void refreshAccessToken(Context context, RefreshCallback callback) {
+        Context applicationContext = context.getApplicationContext();
+        final int refreshGeneration;
+        synchronized (REFRESH_LOCK) {
+            REFRESH_CALLBACKS.add(callback);
+            if (refreshInFlight) return;
+            refreshInFlight = true;
+            refreshGeneration = sessionGeneration;
+        }
+        String currentRefreshToken = getRefreshToken(applicationContext);
+        if (currentRefreshToken == null || currentRefreshToken.isEmpty()) {
+            finishRefresh(false);
+            return;
+        }
+        JSONObject payload = new JSONObject();
+        try {
+            payload.put("refreshToken", currentRefreshToken);
+        } catch (Exception error) {
+            finishRefresh(false);
+            return;
+        }
+        JsonObjectRequest request = new JsonObjectRequest(
+                Request.Method.POST,
+                WebService.getRefreshUrl(),
+                payload,
+                response -> {
+                    try {
+                        if (!updateRotatedTokensIfCurrent(
+                                applicationContext,
+                                response.getString("accessToken"),
+                                response.getString("refreshToken"),
+                                refreshGeneration
+                        )) {
+                            finishRefresh(false);
+                            return;
+                        }
+                        finishRefresh(true);
+                    } catch (Exception error) {
+                        clearIfCurrent(applicationContext, refreshGeneration);
+                        finishRefresh(false);
+                    }
+                },
+                error -> {
+                    clearIfCurrent(applicationContext, refreshGeneration);
+                    finishRefresh(false);
+                }
+        );
+        request.setTag("SessionRefresh");
+        PeticionesRed.getInstancia(applicationContext).anhadirPeticionACola(request);
+    }
+
+    private static void finishRefresh(boolean success) {
+        List<RefreshCallback> callbacks;
+        synchronized (REFRESH_LOCK) {
+            callbacks = new ArrayList<>(REFRESH_CALLBACKS);
+            REFRESH_CALLBACKS.clear();
+            refreshInFlight = false;
+        }
+        for (RefreshCallback callback : callbacks) callback.onComplete(success);
+    }
+
     public static void saveRefreshToken(Context context, String token) {
+        refreshToken = token;
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.JELLY_BEAN_MR2) {
             Log.w(TAG, "Persistencia desactivada: Android Keystore no está disponible");
             return;
         }
+        persistRefreshToken = true;
+        persistRefreshToken(context, token);
+    }
+
+    private static void persistRefreshToken(Context context, String token) {
         try {
             byte[] encrypted;
             byte[] iv = new byte[0];
@@ -100,7 +218,9 @@ public final class SessionManager {
                 cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
                 cipher.init(Cipher.DECRYPT_MODE, key);
             }
-            return new String(cipher.doFinal(encrypted), "UTF-8");
+            refreshToken = new String(cipher.doFinal(encrypted), "UTF-8");
+            persistRefreshToken = true;
+            return refreshToken;
         } catch (Exception error) {
             Log.e(TAG, "La sesión almacenada ya no es válida", error);
             clear(context);
@@ -109,7 +229,35 @@ public final class SessionManager {
     }
 
     public static void clear(Context context) {
-        accessToken = null;
+        synchronized (REFRESH_LOCK) {
+            sessionGeneration++;
+            accessToken = null;
+            refreshToken = null;
+            persistRefreshToken = false;
+            clearPersistedToken(context);
+        }
+    }
+
+    private static boolean updateRotatedTokensIfCurrent(
+            Context context,
+            String newAccessToken,
+            String newRefreshToken,
+            int expectedGeneration
+    ) {
+        synchronized (REFRESH_LOCK) {
+            if (sessionGeneration != expectedGeneration) return false;
+            updateRotatedTokens(context, newAccessToken, newRefreshToken);
+            return true;
+        }
+    }
+
+    private static void clearIfCurrent(Context context, int expectedGeneration) {
+        synchronized (REFRESH_LOCK) {
+            if (sessionGeneration == expectedGeneration) clear(context);
+        }
+    }
+
+    private static void clearPersistedToken(Context context) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply();
     }
 

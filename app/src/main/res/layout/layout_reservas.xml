@@ -1,22 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:orientation="vertical" android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="wrap_content"
+    android:background="@drawable/card_background"
+    android:padding="16dp">
 
     <TextView
         android:id="@+id/tv_numero_habitacion_reservada"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textSize="25sp"/>
+        android:textColor="@color/text_primary"
+        android:textSize="18sp"
+        android:textStyle="bold"/>
     <TextView
         android:id="@+id/tv_fecha_entrada"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textSize="20sp"/>
+        android:textColor="@color/text_secondary"
+        android:textSize="15sp"/>
     <TextView
         android:id="@+id/tv_fecha_salida"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textSize="20sp"/>
+        android:textColor="@color/text_secondary"
+        android:textSize="15sp"/>
+
+    <Button
+        android:id="@+id/button_cancel_reservation"
+        android:layout_width="wrap_content"
+        android:layout_height="48dp"
+        android:layout_marginTop="10dp"
+        android:backgroundTint="@color/brand_secondary"
+        android:text="@string/cancel_reservation"
+        android:textAllCaps="false"
+        android:textColor="@android:color/white" />
 
 </LinearLayout>

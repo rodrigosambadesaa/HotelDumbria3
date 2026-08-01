@@ -39,7 +39,8 @@ if ($LASTEXITCODE -ne 0) { throw "No se pudo arrancar $service." }
 Write-Host "Esperando a que Android API $Api termine de arrancar..."
 wsl -d Ubuntu -- bash -lc "$compose exec -T $service adb wait-for-device"
 for ($attempt = 0; $attempt -lt 120; $attempt++) {
-    $booted = (wsl -d Ubuntu -- bash -lc "$compose exec -T $service adb shell getprop sys.boot_completed 2>/dev/null").Trim()
+    $bootOutput = wsl -d Ubuntu -- bash -lc "$compose exec -T $service adb shell getprop sys.boot_completed 2>/dev/null"
+    $booted = if ($null -eq $bootOutput) { "" } else { ($bootOutput | Out-String).Trim() }
     if ($booted -eq "1") { break }
     Start-Sleep -Seconds 3
 }
