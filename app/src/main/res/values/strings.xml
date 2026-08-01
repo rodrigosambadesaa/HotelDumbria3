@@ -29,4 +29,15 @@
     <string name="confirm_selection">Confirmar selección</string>
     <string name="select_room">Seleccionar habitación</string>
     <string name="room_photo">Fotografía de la habitación</string>
+    <string name="location_menu_title">Localización</string>
+    <string name="location_title">Localización en Dumbría</string>
+    <string name="location_marker_title">Dumbría</string>
+    <string name="location_address">15151 Dumbría, A Coruña</string>
+    <string name="location_checking_internet">Comprobando el acceso a Internet…</string>
+    <string name="location_loading_map">Cargando el mapa…</string>
+    <string name="location_no_internet">No se puede cargar el mapa sin acceso a Internet.</string>
+    <string name="location_map_error">No se pudo cargar el mapa. Puedes reintentar o abrir la navegación.</string>
+    <string name="location_open_navigation">Abrir navegación</string>
+    <string name="location_retry">Reintentar conexión</string>
+    <string name="location_no_navigation_app">No hay ninguna aplicación de mapas disponible.</string>
 </resources>

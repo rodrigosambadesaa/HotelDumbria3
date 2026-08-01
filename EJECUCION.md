@@ -76,6 +76,9 @@ ejecutes nunca API 16, 29 y 36 a la vez. El backend sí puede permanecer activo.
 Al terminar el arranque se abre automáticamente una pantalla interactiva en
 `http://localhost:6080/vnc.html?autoconnect=1&resize=scale`. Si el navegador no
 se abre, visita esa dirección manualmente. Usa `-NoBrowser` para no abrirla.
+Haz clic dentro de la pantalla noVNC para darle el foco: el AVD está configurado
+con teclado físico y acepta directamente el teclado del equipo. El teclado
+virtual de Android sigue disponible cuando se necesite.
 
 ### Android 4.1, API 16
 

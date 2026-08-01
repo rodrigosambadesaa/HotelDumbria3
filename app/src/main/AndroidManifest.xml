@@ -40,9 +40,12 @@
             android:name="com.google.android.geo.API_KEY"
             android:value="@string/google_maps_key" />
 
-        <activity android:name=".ActivityListadoReservas" />
+        <activity
+            android:name=".ActivityLocalizacion"
+            android:exported="false"
+            android:label="@string/location_title"
+            android:parentActivityName=".MainActivity" />
         <activity android:name=".UploadImagenActivity" />
-        <activity android:name=".ActivityContacto" />
         <activity android:name=".ActivityDatosFragment" />
         <activity
             android:name=".ActivityLoginRegistro"
@@ -57,14 +60,6 @@
         </activity>
         <activity
             android:name=".MainActivity"
-            android:label="@string/app_name"
-            android:theme="@style/AppTheme.NoActionBar" />
-        <activity
-            android:name=".ActivityDatos"
-            android:label="@string/app_name"
-            android:theme="@style/AppTheme.NoActionBar" />
-        <activity
-            android:name=".ActivityReservas"
             android:label="@string/app_name"
             android:theme="@style/AppTheme.NoActionBar" />
     </application>

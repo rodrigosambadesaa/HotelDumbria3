@@ -34,7 +34,6 @@ import org.json.JSONObject;
 
 import java.util.HashMap;
 import java.util.List;
-import java.util.Objects;
 
 import static android.app.Activity.RESULT_CANCELED;
 import static android.app.Activity.RESULT_OK;
@@ -265,8 +264,7 @@ public class ActivityDatos extends Fragment {
                                                     setLv_poblaciones_provincias(layout.findViewById(R.id.lv_poblaciones_provincias));
                                                     getLv_poblaciones_provincias().setAdapter(getArrayAdapterPoblacionesProvincias());
                                                     setDatosDialog(new AlertDialog.Builder(
-                                                            Objects.requireNonNull(
-                                                                    getActivity())));
+                                                            requireActivity()));
                                                     getDatosDialog().setTitle("Seleccione población y provincia");
                                                     getDatosDialog().setAdapter(getArrayAdapterPoblacionesProvincias(),
                                                             (dialog, which) -> {
@@ -319,7 +317,7 @@ public class ActivityDatos extends Fragment {
 
         setPeticionesRed(PeticionesRed.getInstancia(getActivity()));
 
-        if (Objects.requireNonNull(getActivity()).findViewById(R.id.contenedor_fragment_activity_datos)!=null) {
+        if (requireActivity().findViewById(R.id.contenedor_fragment_activity_datos)!=null) {
             //Activity
             setIntentRecibido(getActivity().getIntent());
             setAccion(getIntentRecibido().getAction());
@@ -377,7 +375,7 @@ public class ActivityDatos extends Fragment {
                     setClave(getEdt_clave().getText().toString());
                     setLatitude(0);
                     setLongitude(0);
-                    if (Objects.requireNonNull(getActivity()).findViewById(R.id.contenedor_fragment_activity_datos)!=null) {
+                    if (requireActivity().findViewById(R.id.contenedor_fragment_activity_datos)!=null) {
                         //Activity
                         setImagen("imagen");
                     }

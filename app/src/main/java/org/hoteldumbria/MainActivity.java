@@ -133,6 +133,21 @@ public class MainActivity extends AppCompatActivity {
                     //argumentos.putString();
                 }
 
+                if (menuItem.getItemId() == R.id.nav_localizacion) {
+                    startActivity(new Intent(
+                            MainActivity.this,
+                            ActivityLocalizacion.class
+                    ));
+                    if (idMenuSeleccionado != -1) {
+                        navigationView.setCheckedItem((int) idMenuSeleccionado);
+                    } else {
+                        menuItem.setChecked(false);
+                    }
+                    ((DrawerLayout) findViewById(R.id.drawer_layout))
+                            .closeDrawers();
+                    return true;
+                }
+
                 NavController navController = Navigation.findNavController(MainActivity.this, R.id.nav_host_fragment);
                 NavOptions.Builder opcionesBuilder = new NavOptions.Builder();
                 opcionesBuilder.setPopUpTo(menuItem.getItemId(), true);

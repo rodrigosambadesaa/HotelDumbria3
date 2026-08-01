@@ -20,5 +20,9 @@
             android:id="@+id/nav_listado_reservas"
             android:icon="@drawable/ic_action_listar_reservas"
             android:title="Listado de reservas" />
+        <item
+            android:id="@+id/nav_localizacion"
+            android:icon="@drawable/ic_action_location"
+            android:title="@string/location_menu_title" />
     </group>
 </menu>

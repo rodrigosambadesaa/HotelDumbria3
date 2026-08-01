@@ -24,6 +24,12 @@ Google, Facebook, Wolfram Alpha, Apple y Amazon. Las Activities y Fragments
 usan el API asíncrono y cancelan las comprobaciones pendientes al abandonar su
 ciclo de vida visible.
 
+El menú lateral incluye **Localización**. La pantalla comprueba primero el
+acceso real a Internet, muestra Dumbría en Google Maps cuando se ha configurado
+una clave válida y utiliza un mapa OpenStreetMap como alternativa. El botón
+**Abrir navegación** delega la ruta en la aplicación de mapas predeterminada
+del dispositivo mediante un intent `geo:`.
+
 Empieza por [EJECUCION.md](EJECUCION.md). El modelo de amenazas y controles se
 documenta en [SECURITY.md](SECURITY.md), y la migración histórica en
 [legacy/MIGRACION.md](legacy/MIGRACION.md).

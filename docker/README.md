@@ -33,3 +33,5 @@ Los perfiles cubren Android 4.1 (API 16), Android 10 (API 29) y Android 16
 La pantalla de cualquiera de los tres emuladores se publica mediante noVNC en
 `http://localhost:6080/vnc.html?autoconnect=1&resize=scale`. El script
 `scripts/emulator.ps1` abre esa dirección automáticamente.
+Tras hacer clic en la pantalla noVNC, el teclado del equipo controla Android;
+el contenedor fuerza `hw.keyboard=yes` incluso para los AVD ya persistidos.

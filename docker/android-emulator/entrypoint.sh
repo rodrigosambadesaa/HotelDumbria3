@@ -16,6 +16,14 @@ if [[ ! -f "/root/.android/avd/${AVD_NAME}.ini" ]]; then
     --device "pixel"
 fi
 
+# noVNC/x11vnc sends the host's key events to the emulator window. Ensure the
+# AVD exposes a hardware keyboard so Android consumes those events instead of
+# requiring the on-screen keyboard. Apply it on every start as existing AVDs
+# are persisted in a Docker volume.
+AVD_CONFIG="/root/.android/avd/${AVD_NAME}.avd/config.ini"
+sed -i '/^hw\.keyboard[[:space:]]*=/d' "${AVD_CONFIG}"
+printf '\nhw.keyboard = yes\n' >> "${AVD_CONFIG}"
+
 # El invitado Android ve el loopback del contenedor como 10.0.2.2. Este proxy
 # permite que la app llegue al backend publicado por el mismo Docker Engine.
 socat TCP-LISTEN:8080,fork,reuseaddr TCP:host.docker.internal:8080 &

@@ -22,14 +22,18 @@ public class ToolsFragment extends Fragment {
                              ViewGroup container, Bundle savedInstanceState) {
         toolsViewModel =
                 new ViewModelProvider(this).get(ToolsViewModel.class);
-        View root = inflater.inflate(R.layout.fragment_tools, container, false);
-        final TextView textView = root.findViewById(R.id.text_tools);
-        toolsViewModel.getText().observe(this, new Observer<String>() {
+        return inflater.inflate(R.layout.fragment_tools, container, false);
+    }
+
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        final TextView textView = view.findViewById(R.id.text_tools);
+        toolsViewModel.getText().observe(getViewLifecycleOwner(), new Observer<String>() {
             @Override
             public void onChanged(@Nullable String s) {
                 textView.setText(s);
             }
         });
-        return root;
     }
 }
