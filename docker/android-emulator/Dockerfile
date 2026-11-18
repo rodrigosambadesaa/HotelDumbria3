@@ -1,5 +1,8 @@
 FROM eclipse-temurin:17-jdk-jammy
 
+# CVE-2026-114938: disable vulnerable Base64 intrinsic in Java 17 build/tooling JVMs.
+ENV JAVA_TOOL_OPTIONS="-XX:-UseBASE64Intrinsics"
+
 ARG ANDROID_API
 ARG SYSTEM_IMAGE_TAG=google_apis
 ARG SYSTEM_IMAGE_ARCH=x86_64
